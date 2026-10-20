@@ -1,0 +1,8 @@
+vendor/
+node_modules/
+.build/
+*.xcodeproj/
+runs/
+__pycache__/
+.DS_Store
+.claude/ecc/
