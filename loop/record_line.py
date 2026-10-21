@@ -39,13 +39,27 @@ def load(candidate: str) -> tuple[str, int, str]:
         rec = json.loads((VENDOR / "recording-59372564.json").read_text())[0]
         return rec["recording"], rec["frames"], "wr_22123"
     j = json.loads(Path(candidate).read_text())
-    return j["recording"], j.get("frames") or j["finishFrame"], f"{Path(candidate).stem}_{j.get('finishFrame')}"
+    name = f"{Path(candidate).stem}_{j.get('finishFrame')}"
+    if "recording" in j:
+        return j["recording"], j.get("frames") or j["finishFrame"], name
+    # {controls} or {toggles}: encode to the game's recording format.
+    out = subprocess.run(["node", "--input-type=module", "-e",
+        "import fs from 'node:fs'; import {encodeRecording, controlsFromToggles} from './loop/recording.mjs';"
+        "const j=JSON.parse(fs.readFileSync(process.argv[1]));"
+        "const n=j.finishFrame??j.frames??(j.controls?j.controls.length:30000);"
+        "const c=j.controls?Uint8Array.from(j.controls):controlsFromToggles(j.toggles,n);"
+        "console.log(JSON.stringify({rec:encodeRecording(c),n:c.length}))", candidate],
+        cwd=ROOT, capture_output=True, text=True, check=True).stdout
+    r = json.loads(out)
+    return r["rec"], r["n"], name
 
 
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("candidate", nargs="?", default="opt/best.json")
     ap.add_argument("--wr", action="store_true")
+    ap.add_argument("--max-s", type=float, default=None, help="stop recording after this many seconds (for non-finishing attempts)")
+    ap.add_argument("--out", type=Path, default=None)
     a = ap.parse_args()
     recording, frames, name = load("--wr" if a.wr else a.candidate)
     server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), functools.partial(Static, directory=str(VENDOR)))
@@ -89,7 +103,10 @@ def main():
         pg.wait_for_timeout(50)
         pg.keyboard.up("ArrowUp")
         t0 = time.time()
-        while pg.evaluate("globalThis.__finish") is None and time.time() - t0 < frames / 1000 + 15:
+        limit = frames / 1000 + (15 if a.max_s is None else 0)
+        if a.max_s is not None:
+            limit = min(limit, a.max_s)
+        while pg.evaluate("globalThis.__finish") is None and time.time() - t0 < limit:
             pg.wait_for_timeout(250)
         pg.wait_for_timeout(3500)  # hold on the finish screen
         fin = pg.evaluate("globalThis.__finish")
@@ -98,7 +115,7 @@ def main():
         ctx.close()
         b.close()
     server.shutdown()
-    mp4 = out_dir / f"{name}.mp4"
+    mp4 = a.out or out_dir / f"{name}.mp4"
     subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-i", str(video), "-c:v", "libx264", "-pix_fmt", "yuv420p",
                     "-movflags", "+faststart", str(mp4)], check=True)
     print(json.dumps({"swapped_create_car": swapped, "game_finish_frames": fin, "expected": frames, "video": str(mp4)}))
