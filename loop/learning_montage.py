@@ -50,12 +50,16 @@ def main():
         cmd = ["python3", "loop/record_line.py", str(f), "--out", str(raw)]
         if not (last and fin):
             cmd += ["--max-s", str(a.max_s)]
-        subprocess.run(cmd, cwd=ROOT, check=True, capture_output=True)
+        for attempt in range(3):  # headless boot is occasionally flaky
+            if subprocess.run(cmd, cwd=ROOT, capture_output=True).returncode == 0:
+                break
+        else:
+            raise RuntimeError(f"record_line failed 3 times for {f}")
         png = OUT / f"{f.stem}.png"
         label(text, png)
         tagged = OUT / f"{f.stem}_tagged.mp4"
         # skip the ~7 s menu boot at the start of each recording
-        subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-ss", "6.5", "-i", str(raw), "-i", str(png),
+        subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-ss", "4.5", "-i", str(raw), "-i", str(png),
                         "-filter_complex", "[0:v]scale=1280:720[v];[v][1:v]overlay", "-c:v", "libx264",
                         "-pix_fmt", "yuv420p", "-r", "30", str(tagged)], check=True)
         clips.append(tagged)
