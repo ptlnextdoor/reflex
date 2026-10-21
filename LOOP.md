@@ -61,3 +61,5 @@ anything not produced by the agent itself. Run it before logging any result.
 | 6 | 23:06 | D | `loop/record_line.py`: play any line through the real game's engine and record it | works; used for the excluded row 5 video | yes (harness) |
 | 7 | 23:10 | all | **isolation rule** (owner): restart planning from scratch, no human data | | yes |
 | 8 | 23:20 | E | WR removed from ctrl/; parity on synthetic controls; reference = learn/best.json when present | coordinator re-check: `loop/isolation.py ctrl data learn` **ok**; `node ctrl/check.mjs` 3/3 parity, snapshot/restore exact, 115k ticks/s | yes |
+| 9 | 23:23 | B | `data/hook.js`: feed byte-exact sim states into the real game renderer; `data/drive.mjs` random drives (no human data) | 10 frames, page car position == sim position, error **0.0**; HUD timer == frame index. Isolation ok (coordinator re-check) | yes |
+| 10 | 23:23 | infra | killed a leftover WR-derived search (`opt/search.mjs --start opt/best.json`, pid 63029, 30 min, ~3 cores) | CPU freed for the from-scratch learner. opt/ is excluded under the isolation rule | yes |
