@@ -1,0 +1,25 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>reflex probe</title>
+<style>
+  html, body { margin: 0; padding: 0; height: 100%; background: #000; overflow: hidden; }
+  /* No transitions anywhere. The div fills the window. */
+  #p { position: fixed; inset: 0; background: #000; }
+</style>
+</head>
+<body>
+<div id="p"></div>
+<script>
+  // Fastest path: flip the inline style directly inside the event handler.
+  // No rAF, no class toggle, no transition. keydown -> white, keyup -> black.
+  var p = document.getElementById('p');
+  var s = p.style;
+  window.addEventListener('keydown', function () { s.background = '#fff'; }, true);
+  window.addEventListener('keyup',   function () { s.background = '#000'; }, true);
+  // Keep focus on the window so key events land here.
+  window.focus();
+</script>
+</body>
+</html>

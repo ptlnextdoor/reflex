@@ -1,0 +1,30 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>reflex anim (capture driver)</title>
+<style>
+  html, body { margin: 0; padding: 0; height: 100%; background: #000; overflow: hidden; }
+  #b { position: fixed; left: 0; top: 0; width: 24px; height: 24px; background: #111; }
+</style>
+</head>
+<body>
+<div id="b"></div>
+<script>
+  // ponytail: SCK only delivers a new frame when pixels change. To measure the
+  // 120 Hz delivery cadence in bench-capture, drive a per-vsync pixel change.
+  // Ceiling: this is a synthetic cadence driver, not the game. A real game tab
+  // changes every frame anyway, so bench-capture over Polytrack needs no driver.
+  var b = document.getElementById('b').style;
+  var i = 0;
+  function tick() {
+    i = (i + 1) & 255;
+    // Nudge one corner box each frame so the dirty-rect changes every vsync.
+    b.transform = 'translateX(' + (i & 1) + 'px)';
+    b.background = (i & 1) ? '#101010' : '#111111';
+    requestAnimationFrame(tick);
+  }
+  requestAnimationFrame(tick);
+</script>
+</body>
+</html>
