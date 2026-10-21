@@ -3,37 +3,60 @@
 Coordinator: jcode session `herb`. Workers: claude-fable-5-1 at max effort.
 Scoring is code, never a model's opinion. Every row below has a command that reproduces it.
 
-## Objective
+## Objective (revised 2026-10-20 23:10 PT, owner)
 
-Beat the Summer 1 world record (22.123 s) in Polytrack, first in the byte-exact sim,
-then live from pixels with a visual System One model. Never submit anything.
+**Reflex-1 must learn to drive on its own and beat 22.123 s without any human run.**
+The 22.111 s result (rows 2 and 5) was the #1 player's exact key presses with 15
+of them moved by 1 to 2 ms, including his off-track moment at the start. That's a
+human run, tweaked. It is **not** a model result and is moved to "Excluded" below.
+
+## Isolation rule (enforced, checked by the coordinator)
+
+No human recording, ghost, or leaderboard data may reach anything that produces Reflex-1's
+driving: not as a seed, warm start, reference line, training data, reward target, or
+initial controls. The agent gets only what any new player gets:
+
+- the track (geometry from the track file the game loads, checkpoint order, start pose),
+- the physics (byte-exact sim) to practice in,
+- its own past runs (N+1).
+
+The human WR (22123) is used **only** as the finish-time number to beat, read after
+the fact. `loop/isolation.py` scans the agent's code dirs and fails if they reference
+`recording-59372564`, `vps.kodub.com`, `leaderboard`, `ghost`, or `decodeRecording` of
+anything not produced by the agent itself. Run it before logging any result.
 
 ## Tracks
 
 | track | goal | metric | owner |
 | --- | --- | --- | --- |
-| A optimizer | sim line faster than 22123 ms, robust to timing jitter | `finishFrame` from `sim.run`, plus finish rate under +/-1 to 2 ms jitter | worker A |
-| B data engine | real game frames from headless Chromium (Metal) + exact sim labels | position-match proof, frames/s | worker B |
-| C model | per-frame System One that drives | held-out accuracy on sim labels, ms/frame | after B |
-| D live | closed loop on the real game | real finish ms | after A, B, C |
+| R planner | learn a Summer 1 line from scratch (no human input), then beat 22123 | sim finishFrame of its own best line, learning curve over iterations | worker R |
+| E controller | closed-loop tracking of R's own line under latency/jitter/noise | finish rate + time in the headline cell | worker E (reference must come from R, not the WR) |
+| B data engine | real game frames + exact sim labels, from Reflex-1's own runs | position-match proof | worker B |
+| C perception | visual System One model trained on B's frames | held-out accuracy, ms/frame | later |
+| D live | closed loop on the real game from pixels | real finish ms + video | later |
+
+## Excluded results (not Reflex-1)
+
+| # | what | result | why excluded |
+| --- | --- | --- | --- |
+| 2 | WR with one key press moved 1 ms | 22119 | human run, tweaked |
+| 5 | WR with 15 key presses moved 1 to 2 ms | 22111, Verify true, `runs/videos/side_by_side.mp4` | human run, tweaked, including his off-track at the start |
 
 ## Facts the workers get
 
 - Headless rendering works with no visible window: Playwright `headless=True`,
-  args `--use-angle=metal --enable-gpu --ignore-gpu-blocklist`. The renderer string is
-  "ANGLE Metal Renderer: Apple M4 Pro". The page shows an "unofficial version" banner but loads.
-- WR (recording 59372564): 22123 frames, 133 key toggles, checkpoints at ~4100, 9690,
-  14930 ms. Mask histogram: up 6880, up+right 9106, up+down 3063, up+left 2236, others small.
-- Sim: 114k ticks/s single thread (`node sim/check.js`), 14 cores.
+  args `--use-angle=metal --enable-gpu --ignore-gpu-blocklist`.
+- Sim: 114k ticks/s single thread, 14 cores. Per-ms stepper with heap snapshot/restore:
+  `ctrl/sim.mjs` (Car.step(mask), 23 MB snapshot in 0.6 ms).
+- Controls: 5-bit mask per ms, up=1 right=2 down=4 left=8 reset=16.
 
 ## Iteration log
 
 | # | time | track | change | result | kept |
 | --- | --- | --- | --- | --- | --- |
 | 0 | 21:58 | B | headless Metal render probe | renders, 7 s boot | yes |
-| 1 | 22:00 | A | coordinator scorer `loop/score.mjs`, WR calibration | WR finishes 0/40 under +/-1 ms per-toggle jitter, 0/40 at +/-2 ms. Single-toggle +/-1 ms shifts: 125/266 still finish | yes |
-| 2 | 22:01 | A | single-toggle +/-1 ms shift scan | best finish **22119 ms (-4 ms vs WR)** from one shift. Slack exists | yes |
-| 3 | 22:03 | D | `loop/live_replay.py`: real game, headless Metal, WR keys from Python wall clock via CDP | menu nav works, car drives, **crashed off the track before checkpoint 2** (1/3 cps at 23.2 s). Open-loop wall-clock keys are too jittery for a 0%-margin line, as track A's jitter test predicted | yes (harness) |
-| 4 | 22:04 | D | CDP key-delivery timing into a headless page (200 keys) | after median alignment: p50 0.1 ms, p90 0.3 ms, max 2.9 ms. Worker stamps inputs at `frames + (performance.now() - lastBatch)` and steps in rAF batches. So delivery is good, but the WR line has zero margin: **open loop can't work. Closed-loop tracking (DESIGN L0/L1) is required** | yes |
-| 5 | 22:34 | A | optimizer (opt/, snapshot worker pool, 215 s search) | **22111 ms, -12 ms vs WR**. Coordinator re-check: `loop/score.mjs` finish 22111, game's own Verify(recording, 22111) = **true** (22112 = false). Jitter +/-1 ms: 0/20 finish (still knife-edge) | yes |
-| 6 | 23:06 | D | `loop/record_line.py`: inject a recording into the real game's CreateCar (game's own physics + renderer), headless, recorded | real game finishes **22111** (HUD 00:22.111, "NEW PERSONAL BEST"), WR in same setup **22123**. Side-by-side: `runs/videos/side_by_side.mp4`. This is the optimized input line replayed by the game engine, not yet the live bot driving from pixels | yes |
+| 1 | 22:00 | infra | coordinator scorer `loop/score.mjs` | knife-edge finding: the human WR finishes 0/40 under +/-1 ms jitter | yes |
+| 3 | 22:03 | D | `loop/live_replay.py` headless live harness + video | open-loop replay crashes; closed loop required | yes (harness) |
+| 4 | 22:04 | D | CDP key timing | p50 0.1 ms, max 2.9 ms | yes |
+| 6 | 23:06 | D | `loop/record_line.py`: play any line through the real game's engine and record it | works; used for the excluded row 5 video | yes (harness) |
+| 7 | 23:10 | all | **isolation rule** (owner): restart planning from scratch, no human data | | yes |
