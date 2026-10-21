@@ -6,3 +6,4 @@ runs/
 __pycache__/
 .DS_Store
 .claude/ecc/
+.venv/

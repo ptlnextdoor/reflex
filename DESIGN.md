@@ -1,125 +1,145 @@
-# reflex: a System 1 that drives Polytrack from pixels
+# reflex: a visual System One engine that plays Polytrack
 
-Goal: a local program that watches a live video stream of the desktop, presses real
-keyboard keys, and drives Polytrack (kodub.com) faster than any human. No hooks into
-the game process at runtime. Pixels in, keys out.
+Goal: a local, minimum-latency **visual System One model runtime** in the sys1rust
+lineage (Rust, MLX, custom Metal kernels, same `/v1/systemone` API), with Jev 1.14-style
+vision: images in `state`, typed answers (choice, score, noul) and **Box** (hitbox)
+answers with calibrated confidence. The demo and benchmark: it watches a live video
+stream of the desktop, presses real keys, and drives Polytrack (kodub.com) faster than
+any human. Pixels in, keys out, no hooks into the game at runtime.
 
-Focus, in order: (1) inference engineering of the eye-brain-hand loop, (2) the
-interface between the harness and the desktop, the game and the controls,
-(3) self-correction, so it gets better each run like hand-eye coordination.
+Focus, in order: (1) inference engineering, (2) the harness interface to the desktop,
+the game and the controls, (3) self-correction, so it improves every run.
 
-## Facts that shape everything (read from the 0.6.3 bundle, 2026-10-20)
+## What exists (2026-10-20)
 
-- Physics is a WASM module (`lib/polytrack_physics.wasm`) run in a Web Worker at a
-  fixed **1 ms tick**. Controls are **5 booleans**: up, right, down, left, reset.
-- The game ships a `testDeterminism` call and a `Verify` path that replays a
-  recording frame by frame and checks the finish frame. **The sim is deterministic.**
-- A keydown reaches the worker by `postMessage`. The worker stamps it at
-  `frames + (performance.now() - lastTick)`, so **input timing resolves to 1 ms**.
-- Render runs on `requestAnimationFrame`. This Mac's display is 120 Hz (8.3 ms/frame).
-- Official tracks live at `tracks/official/<name>.track` (Summer 1, Winter, Desert...).
-- Finish times are integer milliseconds (`numberOfFrames`).
-- The in-game ghost feature serves full input recordings over a read-only GET
-  (`vps.kodub.com/v6/recordings?ids=`). Summer 1 world record: **22.123 s** (22123 frames,
-  2026-10-09), top 5 within 147 ms, 7.0M entries. That recording is the parity test for
-  the sim (must finish at exactly frame 22123) and the seed for the optimizer.
+| model | modality | open | box | latency note |
+| --- | --- | --- | --- | --- |
+| Jev 1.14 (TypeSafe) | text + images | no, hosted API | yes (preview) | network round trip |
+| Laya (Convai) | text | yes, ModernBERT-large | no | 33 ms stock, 13 to 15 ms in sys1rust on M5 |
+| Valen 0.8B/2B/4B | text, image, video | yes, Apache-2.0 | no | Qwen3.5 + ViT, PyTorch reference, ONNX/GGUF exports |
+| Visual Jev (paper) | image | 4B LoRA | no | 5.7 ms/question amortized at 32 questions on an RTX 5090 |
 
-Consequence: the perfect run is a list of key events with 1 ms timestamps. Humans lose
-to that list in two places: the **line** (which inputs) and the **execution** (when).
-A bot wins on both only if its execution survives timing jitter, because a 1 ms slip
-early in a run changes the whole trajectory after it. That is why vision matters:
-it closes the loop.
+Valen-0.8B: Qwen3.5-0.8B text tower (24 layers, 3 of every 4 are Gated DeltaNet linear
+attention, hidden 1024), 12-layer ViT (768 wide, patch 16, 2x2 merge), and a 2-layer
+MLP-Mixer decision head over 4 role vectors (context, instruction, candidate, decision).
+Shared-state execution encodes the state once for all questions. It's the starting checkpoint.
 
-## System 1 vs System 2, and where Laya/Jev fit
+Gap we fill: no open model has Box, and nothing runs a visual System One model fast on a Mac.
 
-Laya, Jev, AnyJev, Xor and the rest of the "System One" models are **text** decision
-models (ModernBERT-class encoders). Best local number is sys1rust at 13 to 15 ms per
-decision on an M5. That is wrong modality and roughly 2 frames too slow for a 120 Hz
-control loop. Use them where they fit: menu navigation (pick track, press Play,
-retry), Jev-style, off the hot path.
+## Polytrack facts (from the 0.6.3 bundle)
 
-The driving System 1 is a **sub-millisecond pixel policy**: a tiny CNN on a downscaled
-crop, run in the same process as capture and key injection. System 2 (Claude/GPT) never
-touches the loop. It plans offline and edits the code between sessions.
+- Physics is WASM in a Web Worker at a fixed **1 ms tick**, 5 boolean controls
+  (up, right, down, left, reset), **deterministic** (the game ships `testDeterminism`
+  and a frame-exact `Verify` replay). Key events are stamped to 1 ms.
+- Render is `requestAnimationFrame`; this display is 120 Hz (8.3 ms/frame).
+- The ghost feature serves full input recordings over a read-only GET. Summer 1 world
+  record: **22.123 s** (22123 frames, 2026-10-09), top 5 within 147 ms, 7.0M entries.
+- Consequence: the sim gives exact ground truth for every frame (car pose, hitbox, the
+  action the plan took). That's a free, unlimited labeled dataset for a visual model.
 
-## The loop (one process, no IPC, no Python in the hot path)
+## The engine (`engine/`, fork of sys1rust)
+
+Method is sys1rust's: **bake-off first, then Rust, then levers, each one measured.**
+
+1. **Bake-off.** Valen-0.8B on this M4 Pro: PyTorch MPS (reference answers), the ONNX
+   export (CoreML EP), the GGUF export, mlx-vlm. Same frames, same questions. Report
+   p50/p99 per request and agreement with the reference. That's the number to beat.
+2. **Rust port.** sys1rust's crate layout: `laya-core` gains Jev's `assets` format and
+   the Box type, a new `valen-mlx` backend runs ViT + Qwen3.5 + Mixer head. Gate:
+   >= 99% agreement with the reference on a fixed workload, like sys1rust's.
+3. **Levers**, one at a time, kept only if p50 drops and agreement holds:
+
+| # | lever | why | needs |
+| --- | --- | --- | --- |
+| 1 | small frames: 256x144 crop = 144 patches = 36 visual tokens | prefill is linear in tokens | config only |
+| 2 | **question-first streaming**: questions go before the image, so their KV and DeltaNet state are computed once per session and reused every frame | in a control loop only the frame changes | fine-tune (Valen trained state-first) |
+| 3 | int8 weights, sys1rust-style tuned matmuls, head only at readout rows | memory floor: 1.8 GB fp16 per forward is >= 6.6 ms at 273 GB/s | kernels |
+| 4 | confidence cascade: distilled tiny student answers when its `answer_confidence` clears a threshold, else the full model | most frames are easy; System One confidence exists for exactly this routing | only if 1 to 3 miss the Hz target |
+
+Rough baseline guess, to be replaced by step 1's number: ~100 tokens through 0.9B
+params is ~180 GFLOP, so ~20 to 25 ms per frame on this GPU. Levers 1 to 3 target
+**< 8 ms p50** (P ~ 0.5). Most likely way it's wrong: the ViT plus DeltaNet scan
+kernels in MLX dominate and don't shrink with token count.
+
+### Box head (the architecture change)
+
+Box as **distributions, not regression**: for each edge (left, right, top, bottom),
+a probability over patch columns or rows. Each row/column of visual tokens is pooled
+into a candidate vector and scored against the decision vector, the same way Valen
+scores choice candidates. Expected value gives sub-patch precision, and entropy gives a
+calibrated confidence, so Box keeps System One's typed answer + probability contract.
+YOLOv8's distribution focal loss is the precedent: bins beat raw regression on box edges.
+Trained on sim-labeled Polytrack frames (exact projected car hitbox per frame), then
+general data if needed. Metric: mean IoU and edge error in pixels vs sim ground truth.
+
+## Driving with System One questions
+
+Every frame, one request with a shared state and fixed questions:
 
 ```
-ScreenCaptureKit stream (game rect, scaled to 256x144 by WindowServer, 120 Hz, queueDepth 3)
-  -> IOSurface (zero copy)
-  -> eye: state estimator (car pose + hitboxes relative to the planned line)
-  -> brain: action = plan[t + latency] (feedforward) + correction(state error) (feedback)
-  -> hand: CGEventPost key down/up
+state:     { frame: <image>, plan: "up+right for 34 ms", last: "up" }
+questions: steer    choice {left, straight, right}
+           throttle choice {gas, coast, brake}
+           car      box    "the player's car in `frame`"
+           off_line noul   "is the car off the planned line?"
 ```
 
-Latency budget, target vs human (~200 ms visual reaction):
+The plan (from the sim optimizer, seeded with the WR) supplies 1 ms-precise timing as a
+feedforward prior. The model's job is correction, the way Jev browser agents pick an action
+and a target with calibrated confidence. Low confidence falls back to the plan.
 
-| stage | target | how we know |
-| --- | --- | --- |
-| capture: compositor to callback | <= 1 frame (8.3 ms) | SCK frame timestamp vs mach time |
-| eye + brain inference | < 1 ms p50, < 2 ms p99 | in-process timer, 10k frames |
-| hand: post to browser keydown | < 2 ms | in-page `performance.now()` probe page |
-| game: keydown to rendered pixel | 1 to 2 frames | motion-to-photon bench |
-| **motion-to-photon, total** | **< 30 ms p50** | inject key, count until pixels change |
+## Harness interface (desktop, game, controls)
 
-P(under 30 ms p50 on this M4 Pro) ~ 0.8. Most likely way it's wrong: compositor and
-browser frame pacing add a frame we can't remove from user space.
+```
+eye/ (Swift): ScreenCaptureKit stream of the game rect, 256x144, 120 Hz, IOSurface
+   -> engine/ (Rust): /v1/systemone (Jev-compatible HTTP) + a streaming mode
+      (questions once, then frames, answers back)
+   -> eye/ hand: CGEvent key down/up, postToPid when the browser accepts background keys
+```
 
-Inference bake-off (sys1rust style, same frames, same answers, pick by p99):
-CPU (Accelerate/BNNS) vs ANE (Core ML) vs GPU (MPSGraph). For a ~100k-parameter net
-the dispatch overhead decides it, not FLOPs, so measure, don't guess.
+- Frames go through HTTP first (sys1rust's HTTP adds 0.3 ms).
+  `ponytail:` HTTP + raw BGRA body; zero-copy IOSurface handoff when HTTP shows in the profile.
+- Safety: keys only reach the target app, all keys are released on any exit, and there's a
+  kill switch.
+- System 2 (Claude Code) reaches the same engine and controls as tools, for menus and
+  recovery. Never in the per-frame loop.
 
-## Hand-eye coordination: four loops at four timescales
+Latency budget: capture <= 8.3 ms, engine < 8 ms, key to game < 2 ms, game render 1 to
+2 frames. Motion-to-photon target < 30 ms p50 without the model and < 40 ms with it
+(human visual reaction ~200 ms).
 
-This is the self-correcting part. It's the cerebellum's design: a feedforward motor
-program plus feedback error learning (Kawato 1987), which is why it fits.
+## Self-correction: four loops at four timescales
+
+Cerebellum design: a feedforward motor program plus feedback error learning (Kawato 1987).
 
 | loop | timescale | learns | signal |
 | --- | --- | --- | --- |
-| L0 reflex | every frame | nothing, acts | pose error vs planned line |
-| L1 cerebellum | within a run | latency estimate, correction gains | forward-model prediction error (predicted vs seen pose) |
-| L2 practice | between runs | vision net, robust plan | hindsight labels from the sim |
-| L3 meta | between sessions | code and architecture | paired held-out gate on finish times |
+| L0 reflex | every frame | nothing, acts | System One answers vs plan |
+| L1 cerebellum | within a run | latency estimate, correction gains | predicted vs observed car box |
+| L2 practice | between runs | model weights (LoRA + heads), robust plan | hindsight labels: replay sent keys in the sim, so every captured frame gets an exact label |
+| L3 meta | between sessions | code and architecture | hackkit's paired held-out gate on finish times and engine p50 |
 
-**L2 is the data engine.** After a real run we know every key we sent. Re-simulating
-those keys in the headless sim gives the exact car state at every ms, so every real frame
-gets labeled for free (pose, hitbox). Unknown per-event delivery offsets are solved by
-fitting the re-sim to the observed poses (system identification). Each run makes the
-eye more accurate and the latency model tighter, with no human labeling.
+The plan is scored under injected timing jitter (sampled from L1), so it's robust, not
+just fast. L3 scores with code (sim Verify, real HUD times, bench numbers), never a model.
 
-**The plan gets robust, not just fast.** The trajectory optimizer searches 1 ms input
-sequences in the headless sim and scores each line by finish time *under injected timing
-jitter* (sample offsets from the measured L1 distribution). A line that wins by 3 ms but
-crashes on a 1 ms slip loses to one that is 2 ms slower and never crashes.
+## Rules of engagement
 
-**L3 reuses hackkit's gate** (`hackkit/packages/gate`): an agent proposes a change, it
-runs on held-out tracks, and it's kept only if a paired sign test plus bootstrap CI says
-it beats the champion. The scorer is code (sim-verified and real finish times), never a
-model grading itself.
+Runtime sees only pixels and sends only OS key events to a normal browser window.
+Practice happens in a headless copy of the public physics module. Kodub's files live in
+gitignored `vendor/`. Bot times are **never submitted to the public leaderboard**.
 
-## What "no special accommodations" means here
+## Build order (each slice ends in a number)
 
-Runtime: the bot sees only pixels and sends only OS key events to a normal browser
-window. Offline: it practices in a headless copy of the public physics module, the way
-a human practices. The game's own files are fetched at build time into a gitignored
-`vendor/`, never committed. Bot times stay local and are **not submitted to the public
-leaderboard**, since that would bump real players.
+1. `eye/`: capture, keys, motion-to-photon. **ms.** (in progress)
+2. `sim/`: headless physics, WR replay finishes at frame 22123. **parity + ticks/s.** (in progress)
+3. Bake-off: Valen-0.8B on M4 Pro across runtimes. **p50/p99 ms, agreement.**
+4. Data engine: real-game frames + sim labels (box, keys) from WR replays. **frames/hour.**
+5. `engine/`: Rust port + Box head + levers. **ms, IoU, agreement.**
+6. Closed loop on Summer 1. **finish ms, variance over 20 runs vs 22.123 s.**
+7. L2 + L3 on. **finish ms per session on held-out tracks.**
 
-## Build order (each step is a vertical slice with a number attached)
+P(sim line under 22.123 s) ~ 0.75. P(live from pixels under 22.123 s) ~ 0.35 to 0.5.
+Most likely failure: live timing jitter on a line with almost no margin.
 
-1. `eye/`: Swift: SCK capture of a rect, CGEventPost keys, motion-to-photon bench. **Number: ms.**
-2. `sim/`: Node: load physics WASM, create car on Summer 1, step with controls, prove determinism. **Number: sim ticks/s.**
-3. Open-loop replay: optimizer finds a line in sim, eye/ plays it on the real game. **Number: real vs sim finish ms.**
-4. Eye v1: tiny pose net, hindsight labels from step 3 runs. **Number: pose error px, inference ms.**
-5. Closed loop L0 + L1. **Number: real finish ms and its variance across 20 runs.**
-6. L2 + L3 loops on. **Number: finish ms per session, held-out tracks.**
-
-Target: beat 22.123 s on Summer 1, live, from pixels. Strategy: seed the optimizer with
-the WR inputs and search nearby (TAS-style), so we start at human-best and only need
-to find a few ms. P(sim line under 22.123 s) ~ 0.75. P(executing it live from pixels
-under 22.123 s) ~ 0.35 to 0.5. Most likely failure: live timing jitter, since a
-WR-class line has almost no margin; the jitter-robust scoring above is the counter.
-
-Skipped until a step needs it: Laya/Jev menu navigation (fixed key sequence works first),
-GSD `.planning/` (this file is the plan), an RL policy (feedforward plan + feedback beats
-learning from scratch here), multi-monitor support.
+Skipped until a step needs it: the cascade student (lever 4), MCP tool surface,
+multi-monitor, GSD `.planning/` (this file is the plan), RL from scratch.
