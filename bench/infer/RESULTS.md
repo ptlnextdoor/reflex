@@ -310,3 +310,15 @@ accuracy and is the default until (a) is tested.
 
 Commands: `HF_HUB_OFFLINE=1 .venv/bin/python distill_head.py --n 400 --epochs 60`,
 `.venv/bin/python probe_roles.py`.
+
+### Correction: option (b) has nothing to reuse (coordinator)
+
+Token layout of the trained (state-first) request, 302 tokens: 22 static text before
+the image, 66 image, 3 after, 211 questions + candidates + readout. Option (b), keeping
+candidates after the image, leaves only the **22-token** static prefix cacheable, so it
+saves ~4 ms (0.19 ms/token), not 19. Exact-accuracy paths are therefore:
+- full state-first, **86.7 ms**, 32/32, or
+- trim the question text (the 211 tokens are prose like "Which way should the car in
+  the image steer to stay on the road?"); every 50 tokens cut is ~9.5 ms, but changes
+  the prompt, so it needs the agreement gate re-run.
+Real streaming speed (55 ms) needs option (a), a backbone fine-tune in question-first order.
