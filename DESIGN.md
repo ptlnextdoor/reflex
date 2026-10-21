@@ -129,6 +129,30 @@ Cerebellum design: a feedforward motor program plus feedback error learning (Kaw
 The plan is scored under injected timing jitter (sampled from L1), so it's robust, not
 just fast. L3 scores with code (sim Verify, real HUD times, bench numbers), never a model.
 
+## Generalist or specialist (decision, 2026-10-20)
+
+**General perception, specialist control, N+1 practice.** The model is a general visual
+System One (image + typed questions -> choice/score/noul/box). Nothing in it is Polytrack
+code: the game only shows up as questions ("where is my car", "where is the ghost car",
+"steer?") and as training data. Millisecond control comes from a per-task planner +
+controller, the way a human has general vision and track-specific practice.
+
+- Specialist-only (hand-coded pixel tracker + controller): fastest to a WR video, P ~0.6,
+  generalizes to nothing.
+- General-only (beat the WR as a side effect): P ~0.05. A 22 s run with zero timing
+  margin isn't something general skill finds by accident.
+- Hybrid (this): P ~0.35 to 0.5 live WR, and the perception model transfers.
+
+**Data from the game's own ghosts.** Every leaderboard entry has a replayable recording
+(the "ghost car"). Each one replays byte-exact in the sim, so the top-K ghosts on all 14
+official tracks give unlimited exactly-labeled expert frames. The live ghost on screen is
+also a general skill: "track the target object" (Box on the ghost, Box on my car, close the gap).
+
+**N+1 loop.** Every run (1) records frames + keys, (2) re-simulates its own keys for exact
+labels, (3) fine-tunes perception and updates controller gains, (4) seeds the optimizer.
+Kept only if it beats the champion on held-out tracks (hackkit gate). Generalization is
+measured on tracks it never trained on.
+
 ## Rules of engagement
 
 Runtime sees only pixels and sends only OS key events to a normal browser window.
