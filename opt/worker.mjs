@@ -41,21 +41,23 @@ function readPos() {
 }
 
 // Step controls[from..horizon) from the current heap (which must represent tick `from`).
-// Returns finish info plus per-checkpoint ticks and the terminal position.
-function simulate(controls, from, horizon, prevPos, cpTicks) {
-  let finishFrame = null, posBefore = prevPos, pos = prevPos;
+// Returns finish info, position at the tick before finish (sub-ms progress proxy), checkpoint ticks.
+const prevState = new Uint8Array(STATE_BYTES);
+function simulate(controls, from, horizon, cpTicks) {
+  let finishFrame = null;
   let cp = car.nextCheckpoint();
   const last = controls.length ? controls[controls.length - 1] : 0;
   let t = from;
   for (; t < horizon; t++) {
+    prevState.set(car.state);
     car.step(t < controls.length ? controls[t] : last);
     const ncp = car.nextCheckpoint();
     if (ncp !== cp) { cpTicks.push([ncp, t + 1]); cp = ncp; }
-    if (car.finished()) { finishFrame = t + 1; posBefore = pos; pos = readPos(); break; }
-    if (t === horizon - 2) pos = readPos();
+    if (car.finished()) { finishFrame = t + 1; break; }
   }
-  if (finishFrame === null) { posBefore = pos; pos = readPos(); }
-  return {finishFrame, pos, posBefore, speedKmh: view().getFloat32(7, true), ticks: t - from, nextCheckpoint: cp};
+  const pv = new DataView(prevState.buffer, 0, STATE_BYTES);
+  const posBefore = t > from ? [pv.getFloat32(14, true), pv.getFloat32(18, true), pv.getFloat32(22, true)] : null;
+  return {finishFrame, pos: readPos(), posBefore, speedKmh: view().getFloat32(7, true), ticks: Math.min(t + 1, horizon) - from, nextCheckpoint: cp};
 }
 
 function setBase(controls, every) {
@@ -86,8 +88,7 @@ function evaluate(controls, horizon) {
   for (const snap of base.snaps) if (snap.tick <= d) s = snap; else break;
   restore(s.pages);
   const cpTicks = base.cpTicks.filter(([, tick]) => tick <= s.tick);
-  // position at snapshot is unknown without decoding; use sentinel and let simulate overwrite
-  const r = simulate(controls, s.tick, horizon, null, cpTicks);
+  const r = simulate(controls, s.tick, horizon, cpTicks);
   return {...r, cpTicks, from: s.tick, firstDiff: d};
 }
 
