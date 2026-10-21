@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Isolation check: Reflex-1's code may not touch human runs or leaderboard data.
 
-Scans the agent-owned dirs (learn/, ctrl/, data/ by default). Fails (exit 1) on any
+Scans the agent-owned dirs (learn/, ctrl/, data/, student/ by default). Fails (exit 1) on any
 reference to the human WR recording, the leaderboard API, ghosts, or the opt/ line that
 was derived from the WR. Run before logging any Reflex-1 result.
 
@@ -14,7 +14,7 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-DEFAULT = ["learn", "ctrl", "data"]
+DEFAULT = ["learn", "ctrl", "data", "student"]
 BANNED = [
     (r"recording-\d+", "human recording file"),
     (r"59372564", "WR recording id"),
