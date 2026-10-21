@@ -47,7 +47,9 @@ def load(candidate: str) -> tuple[str, int, str]:
         "import fs from 'node:fs'; import {encodeRecording, controlsFromToggles} from './loop/recording.mjs';"
         "const j=JSON.parse(fs.readFileSync(process.argv[1]));"
         "const n=j.finishFrame??j.frames??(j.controls?j.controls.length:30000);"
-        "const c=j.controls?Uint8Array.from(j.controls):controlsFromToggles(j.toggles,n);"
+        "const fromMasks=(m,n)=>{const c=new Uint8Array(n);let k=0,v=0;for(let t=0;t<n;t++){while(k<m.length&&m[k][0]<=t)v=m[k++][1];c[t]=v;}return c;};"
+        # masks: [[tick, full 5-bit mask], ...] change points (learn/plan.mjs); toggles: [[tick, bit], ...] XOR flips.
+        "const c=j.controls?Uint8Array.from(j.controls):j.masks?fromMasks(j.masks,n):controlsFromToggles(j.toggles,n);"
         "console.log(JSON.stringify({rec:encodeRecording(c),n:c.length}))", candidate],
         cwd=ROOT, capture_output=True, text=True, check=True).stdout
     r = json.loads(out)
@@ -77,6 +79,7 @@ def main():
         pg = ctx.new_page()
         pg.add_init_script(
             "globalThis.polytrackModConfiguration = {unblocked: true};"
+            "try { localStorage.setItem('polytrack_v5_prod_startup_info', JSON.stringify({lastVersion: '0.6.3', isTutorialCompleted: true})); } catch {}"
             f"globalThis.__rec = {json.dumps(recording)}; globalThis.__finish = null; globalThis.__swapped = 0;"
             """
             const post = Worker.prototype.postMessage;
@@ -92,12 +95,16 @@ def main():
                   const u = new Uint8Array(buf); if ((u[11] & 2) && globalThis.__finish === null) globalThis.__finish = u[12] | u[13] << 8 | u[14] << 16; } }); } };
             """)
         pg.goto(origin + "/", wait_until="domcontentloaded")
-        pg.wait_for_timeout(6000)
-        for label in ["Play", "Official tracks", "Summer 1"]:
-            loc = pg.get_by_text(label, exact=True)
-            if loc.count():
-                loc.first.click()
-                pg.wait_for_timeout(1500)
+        # Headless audio decode fails sometimes; the overlay is cosmetic (physics unaffected), hide it for video.
+        pg.add_style_tag(content="#error-screen{display:none!important}")
+        tiles = "() => [...document.querySelectorAll('#ui .track')].some(t => t.offsetParent !== null)"
+        play_main = ("() => { const b=[...document.querySelectorAll('#ui button')].find(b => b.querySelector('p')?.textContent.trim()==='Play' && b.offsetParent!==null); if(!b) return false; b.click(); return true; }")
+        pg.wait_for_function(play_main, timeout=30000)  # clicks Play once it exists
+        pg.wait_for_function(tiles, timeout=15000)
+        pg.evaluate("() => { const t=[...document.querySelectorAll('#ui .track')].find(t => t.querySelector('.track-title p')?.textContent.trim()==='Summer 1'); t.querySelector('button').click(); }")
+        pg.wait_for_function("() => [...document.querySelectorAll('#ui button.play')].some(b => b.offsetParent !== null)", timeout=15000)
+        pg.evaluate("() => [...document.querySelectorAll('#ui button.play')].find(b => b.offsetParent!==null).click()")
+        pg.wait_for_timeout(2000)
         swapped = pg.evaluate("globalThis.__swapped")
         pg.keyboard.down("ArrowUp")  # the game starts the clock on the first input
         pg.wait_for_timeout(50)
