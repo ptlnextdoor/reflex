@@ -98,14 +98,18 @@ class Session:
         if self.track == slug:
             return
         page = self.page
+        tiles_visible = "() => [...document.querySelectorAll('#ui .track')].some(t => t.offsetParent !== null)"
         if self.in_game:
-            page.evaluate("() => { __rf.manual = false; }")
+            # Back to live rAF: hand the callbacks parked by manual mode to the real scheduler.
+            page.evaluate("() => { __rf.manual = false; const cbs = __rf.pending.filter(Boolean); __rf.pending = []; cbs.forEach(cb => requestAnimationFrame(cb)); }")
             self._click("() => { const b=[...document.querySelectorAll('#ui button')].find(b => b.textContent.trim()==='Exit' && b.offsetParent!==null); if(!b) return false; b.click(); return true; }")
-            page.wait_for_function("() => [...document.querySelectorAll('#ui button')].some(b => b.querySelector('p')?.textContent.trim()==='Play' && b.offsetParent!==null)", timeout=20000)
+            # Exit returns to the track picker (tiles visible), not the main menu.
+            page.wait_for_function(tiles_visible, timeout=20000)
             self.in_game = False
+        else:
+            self._click("() => { const b=[...document.querySelectorAll('#ui button')].find(b => b.querySelector('p')?.textContent.trim()==='Play' && b.offsetParent!==null); if(!b) return false; b.click(); return true; }")
+            page.wait_for_function(tiles_visible, timeout=10000)
         title = track_title(slug)
-        self._click("() => { const b=[...document.querySelectorAll('#ui button')].find(b => b.querySelector('p')?.textContent.trim()==='Play' && b.offsetParent!==null); if(!b) return false; b.click(); return true; }")
-        page.wait_for_function("() => [...document.querySelectorAll('#ui .track')].some(t => t.offsetParent !== null)", timeout=10000)
         self._click(f"() => {{ const title={json.dumps(title)}; const t=[...document.querySelectorAll('#ui .track')].find(t => t.querySelector('.track-title p')?.textContent.trim()===title); if(!t) return false; t.querySelector('button').click(); return true; }}")
         page.wait_for_function("() => [...document.querySelectorAll('#ui button.play')].some(b => b.offsetParent !== null)", timeout=10000)
         before = page.evaluate("() => __rf.cars.length")

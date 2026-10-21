@@ -9,4 +9,8 @@ draws exactly sim frame k. No human recordings anywhere (`python3 loop/isolation
 - `labels.mjs <controls.json> <outDir> [step]`: `states.bin` + `labels.jsonl` from any `{controls|toggles}` file.
 - `render.py <controls.json ...> [--step 50] [--small 256x144]`: `runs/frames/<episode>/{k:06d}.png` + `small/`, labels, hitbox.
 - `check.py [controls.json]`: assert-based proof, page car state == sim state (error 0.0), run before trusting a change.
-- `python3 data/render.py runs/drives/summer1_s1.json`: ~20 frames/s at 512x288 on the M4 Pro (boot 3 s excluded).
+- Labels per frame: k, position, quaternion, speedKmh, nextCheckpointIndex, mask_held, mask_next, steer, throttle, brakeLight,
+  box [x0,y0,x1,y1] px (every car-mesh vertex projected through the render's camera, verified against the silhouette).
+- Dataset v1: 40 random episodes (20 summer1, 5 each winter1/desert1/summer2/summer3), 4635 frames at 50 ms,
+  17 frames/s end to end on the M4 Pro (screenshot is 27 of the 59 ms per frame). Inputs can be any own line too
+  (`ctrl/lines/*.json` renders as is).
