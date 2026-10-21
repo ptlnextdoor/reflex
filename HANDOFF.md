@@ -23,6 +23,13 @@ an Anthropic API error, so work stopped mid-flight.
 
 ## Not started
 
+- **Done since:** Valen MLX fp16 port (`bench/infer/valen_mlx.py`): **86.7 ms p50** end to end,
+  forward 82.1 ms (ViT 16.8, text tower 63.2), **32/32 vs true fp32 reference**.
+  PyTorch MPS was 421 ms. See `bench/infer/RESULTS.md`.
+- eye benches on Desktop 2: run `eye/open-test-browser.sh`, user drags the window to
+  Desktop 2, then `eye list-windows --all` for its id and `--window <id> --mode topid`.
+  Never open windows on the user's active Desktop.
+
 - Valen MPS baseline (`cd bench/infer && .venv/bin/python valen_ref.py --device mps`).
 - mlx-vlm path: `mlx-vlm 0.7.9` installed in `bench/infer/.venv`, has `qwen3_5` with
   GatedDeltaNet. Valen keys are `backbone.language_model.*` -> `language_model.model.*`,
