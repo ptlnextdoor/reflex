@@ -64,19 +64,21 @@ function fixture(trackName) {
 // One live car. ponytail: one car at a time per module instance (the worker's car list is
 // internal); use worker_threads for parallel episodes, as sim.js does.
 export class Car {
-  constructor(trackName = 'summer1') {
+  constructor(trackName = 'summer1', {carId} = {}) {
     const {create} = fixture(trackName);
-    send({...create, carRecording: null});
-    this.id = create.carId;
+    this.id = carId ?? create.carId;
+    send({...create, carId: this.id, carRecording: null});
     this.tick = 0;
     physics.HEAPU8.fill(0, outputPointer, outputPointer + STATE);
-    // Live view of the 227-byte output record, valid until the heap grows (it does not during stepping).
-    this.state = new Uint8Array(physics.HEAPU8.buffer, outputPointer, STATE);
+    this.refreshView();
   }
+  // The heap can grow when a car is created (ArrayBuffer detaches); re-point the live view.
+  refreshView() { this.state = new Uint8Array(physics.HEAPU8.buffer, outputPointer, STATE); }
   // Advance one ms with a 5-bit mask (up=1 right=2 down=4 left=8 reset=16). Returns the live state view.
   step(mask) {
     physics._updateCarModel(this.id, mask & 1, (mask >> 1) & 1, (mask >> 2) & 1, (mask >> 3) & 1, (mask >> 4) & 1, outputPointer);
     this.tick++;
+    if (this.state.buffer !== physics.HEAPU8.buffer) this.refreshView();
     return this.state;
   }
   get finished() { return (this.state[11] & 2) !== 0; }

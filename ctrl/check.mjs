@@ -72,6 +72,28 @@ for (const [k, controls] of scripts.entries()) {
   console.log(`snapshot/restore PASS: 500 ms branch diverged by ${Math.hypot(divergedPosition.x - refPosition.x, divergedPosition.z - refPosition.z).toFixed(2)} m, restore reproduced all ${controls.length} ticks`);
 }
 
+// Two cars in one physics instance do not interact: car A's payload bytes are identical with a
+// second car present (even one spawned at the start while A drives), so a sim twin can run next
+// to the real car without a heap copy per frame.
+{
+  const controls = scripts[2];
+  const reference = run('summer1', controls);
+  const a = new Car('summer1');
+  const raw = new Uint8Array(controls.length * STATE_BYTES);
+  for (let t = 0; t < 1000; t++) raw.set(a.step(controls[t]), t * STATE_BYTES);
+  const b = new Car('summer1', {carId: a.id + 1});
+  a.refreshView();
+  for (let t = 1000; t < controls.length; t++) { raw.set(a.step(controls[t]), t * STATE_BYTES); b.step(controls[t] ^ 10); }
+  b.remove(); a.remove();
+  let payloadMismatch = -1;
+  for (let t = 0; t < controls.length && payloadMismatch < 0; t++) {
+    const bytes = decodeState(reference.states.raw, t).numberOfBytes;
+    for (let o = 0; o < bytes; o++) if (raw[t * STATE_BYTES + o] !== reference.states.raw[t * STATE_BYTES + o]) { payloadMismatch = t; break; }
+  }
+  assert.equal(payloadMismatch, -1, 'second car changed the first car\'s payload');
+  console.log('two-car independence PASS: payload bytes identical with a second car present (padding beyond numberOfBytes may differ)');
+}
+
 // Throughput of the stepper alone (controller loops call step per ms).
 {
   const controls = scripts[0];
