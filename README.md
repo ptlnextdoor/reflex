@@ -10,7 +10,7 @@ Never submits to the public leaderboard.
 
 | date | track | time | category | what it shows | files |
 | --- | --- | --- | --- | --- | --- |
-| 2026-10-20 | Summer 1 | **22.111 s** | tool-assisted replay | Reflex reproduces the human world record (Monstrosity, 22.123 s) frame-exactly in the real game, and a local search shaves 12 ms off by shifting 15 key presses by 1 to 2 ms | [video](records/summer1_wr_replay_side_by_side.mp4), [recording](records/summer1_22111.json) |
+| 2026-10-20 | Summer 1 | **22.111 s** | tool-assisted replay | Reflex reproduces the top in-game leaderboard time (Monstrosity, 22.123 s) frame-exactly in the real game, and a local search shaves 12 ms off by shifting 15 key presses by 1 to 2 ms | [video](records/summer1_wr_replay_side_by_side.mp4), [recording](records/summer1_22111.json) |
 
 This is a replay of a human run, not a self-taught lap, so it isn't counted as Reflex-1's own
 result (see `LOOP.md`, "Excluded"). Self-taught records go here when they exist.
