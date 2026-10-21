@@ -5,7 +5,7 @@
 import fs from 'node:fs';
 import vm from 'node:vm';
 import {fileURLToPath} from 'node:url';
-export {decodeState, decodeRecording, STATE_BYTES} from '../sim/sim.js';
+export {decodeState, STATE_BYTES} from '../sim/sim.js';
 
 export const vendor = fileURLToPath(new URL('../vendor/polytrack/0.6.3/', import.meta.url));
 const STATE = 227;
