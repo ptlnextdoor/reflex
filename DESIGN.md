@@ -23,7 +23,33 @@ the game and the controls, (3) self-correction, so it improves every run.
 Valen-0.8B: Qwen3.5-0.8B text tower (24 layers, 3 of every 4 are Gated DeltaNet linear
 attention, hidden 1024), 12-layer ViT (768 wide, patch 16, 2x2 merge), and a 2-layer
 MLP-Mixer decision head over 4 role vectors (context, instruction, candidate, decision).
-Shared-state execution encodes the state once for all questions. It's the starting checkpoint.
+Shared-state execution encodes the state once for all questions. It's the teacher and the
+reference baseline (86.7 ms MLX fp16, `bench/infer/`), not the base. See "Base model" below.
+
+## Base model (decision, 2026-10-21)
+
+**Laya + Jev-style vision.** Reflex-1 is Laya (ModernBERT-large encoder + typed decision
+head, run by sys1rust's `laya-mlx`) with a vision tower added: a small ViT (the `student/`
+track) turns a 256x144 frame into patch tokens, a linear projector puts them in Laya's state
+sequence next to the text, and Laya's choice/score/noul heads answer as before. New answer
+type **Box** reads the visual token positions. Why: sys1rust runs Laya typed-decisions at
+13 to 15 ms per request on a base M5 (`sys1rust/results/`), so ~36 visual + ~60 question
+tokens plus a ~3 to 5 ms ViT should land near 15 to 25 ms on this M4 Pro (estimate, not
+measured), against Valen's measured 86.7 ms. Valen stays as offline teacher (soft labels
+for judgement questions) and as the accuracy baseline. P(Laya+vision reaches box IoU > 0.7
+and steer agreement within 2 points of the fixed-head student) ~0.6. Most likely way it's
+wrong: a text encoder that never saw images needs more alignment data than sim frames give,
+so it answers trained questions well and new visual questions poorly.
+
+## Scope (2026-10-21)
+
+In: (1) the model, Laya + vision + Box, MLX then Rust in sys1rust's crates with the same
+`/v1/systemone` API; (2) the harness, `eye/` capture and keys; (3) the Polytrack demo, a
+self-taught lap driven live from pixels. `sim/`, `data/`, `learn/`, `ctrl/` exist only to
+feed (3) and to label frames for (1).
+Frozen: `opt/` (WR-derived, excluded), `records/` speedrun draft and trailer (wait for a
+self-taught demo). No new demo infrastructure until the model side has a measured
+Laya+vision number.
 
 Gap we fill: no open model has Box, and nothing runs a visual System One model fast on a Mac.
 
@@ -46,7 +72,7 @@ Method is sys1rust's: **bake-off first, then Rust, then levers, each one measure
    export (CoreML EP), the GGUF export, mlx-vlm. Same frames, same questions. Report
    p50/p99 per request and agreement with the reference. That's the number to beat.
 2. **Rust port.** sys1rust's crate layout: `laya-core` gains Jev's `assets` format and
-   the Box type, a new `valen-mlx` backend runs ViT + Qwen3.5 + Mixer head. Gate:
+   the Box type, `laya-mlx` gains the ViT tower and projector (base model above). Gate:
    >= 99% agreement with the reference on a fixed workload, like sys1rust's.
 3. **Levers**, one at a time, kept only if p50 drops and agreement holds:
 
