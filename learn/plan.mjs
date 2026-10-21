@@ -17,7 +17,7 @@ import os from 'node:os';
 import {Worker, isMainThread, parentPort, workerData} from 'node:worker_threads';
 
 const ACTIONS = [1, 9, 3, 0, 8, 2, 4, 12, 6]; // up, up+L, up+R, coast, L, R, brake, brake+L, brake+R
-const BIG = 1e4;
+const BIG = 1e4, LOOK = 1.5;
 const track = JSON.parse(fs.readFileSync(new URL('./track.json', import.meta.url), 'utf8'));
 const NGATES = track.checkpoints.length + 1;
 
@@ -37,18 +37,16 @@ if (!isMainThread) {
   const view = () => new DataView(car.state.buffer, car.state.byteOffset, car.state.length);
   const snap0 = car.snapshot();
   let snapCur = car.snapshot();
-  const score = () => {
+  // Progress of the current state: checkpoints passed * BIG - road distance to the next gate
+  // (learn/route.mjs). Sampled along the rollout; the score takes the best progress seen, so
+  // a flight over a lower road or a late crash does not hide the ground gained before it.
+  const peek = () => {
     const s = car.state, v = view();
     const finished = (s[11] & 2) !== 0;
     const off = finished ? 15 : 12;
     const cp = v.getUint16(off, true);
     const x = v.getFloat32(off + 2, true), y = v.getFloat32(off + 6, true), z = v.getFloat32(off + 10, true);
-    const speed = v.getFloat32(7, true);
-    if (finished) return {score: BIG * (NGATES + 1) - car.finishFrame, cp, finish: car.finishFrame};
-    // Road distance to the next gate along drivable tiles (learn/route.mjs); a crash or a
-    // drop under the road shows up as a large distance, so the elites avoid it.
-    const d = progress(cp, x, y, z);
-    return {score: BIG * cp - d + 0.02 * speed, cp, finish: null, x, y, z};
+    return {cp, x, y, z, speed: v.getFloat32(7, true), d: progress(cp, x, y, z)};
   };
   parentPort.on('message', m => {
     if (m.type === 'advance') { car.restore(snapCur); for (const k of m.masks) car.step(k); snapCur = car.snapshot(snapCur); parentPort.postMessage({type: 'ok'}); return; }
@@ -58,13 +56,23 @@ if (!isMainThread) {
     const out = new Array(n);
     for (let i = 0; i < n; i++) {
       car.restore(snapCur);
-      let fin = null;
+      let fin = null, best = -Infinity;
       outer: for (let j = 0; j < segs; j++) {
         const mask = ACTIONS[seqs[i * segs + j]];
         for (let t = 0; t < seg; t++) { const s = car.step(mask); if (s[11] & 2) { fin = car.finishFrame; break outer; } }
+        const p = peek();
+        best = Math.max(best, BIG * p.cp - p.d);
       }
-      out[i] = score();
-      if (fin !== null) out[i].finish = fin;
+      const e = peek();
+      if (fin !== null) out[i] = {score: BIG * (NGATES + 1) - fin, cp: e.cp, finish: fin, x: e.x, y: e.y, z: e.z};
+      else {
+        // Speed term: the distance the car would add in LOOK more seconds, so a rollout that
+        // arrives fast beats one that arrives slightly closer by crashing. Ending worse than
+        // the best point along the way (fell off, spun, stuck under the road) costs the
+        // regression, capped so flights over lower road are not punished like crashes.
+        const end = BIG * e.cp - e.d;
+        out[i] = {score: best + LOOK * e.speed / 3.6 - Math.min(best - end, 300) * 0.5, cp: e.cp, finish: null, x: e.x, y: e.y, z: e.z};
+      }
     }
     parentPort.postMessage({type: 'scores', out});
   });
@@ -111,18 +119,18 @@ if (!isMainThread) {
   const controls = [];
   const t0 = performance.now();
   // History for the learning montage: every attempt that changes the picture (new checkpoint,
-  // backup after a stall, finish) plus every 10th step, as toggles.
+  // backup after a stall, finish) plus every 10th step, as mask change points {masks: [[tick, mask], ...]}.
   const histDir = new URL('./history/', import.meta.url);
   fs.mkdirSync(histDir, {recursive: true});
   let histN = fs.readdirSync(histDir).length;
   const toggles = c => { const t = []; for (let i = 0; i < c.length; i++) if (i === 0 || c[i] !== c[i - 1]) t.push([i, c[i]]); return t; };
   const saveHistory = (ctrl, best, note) => {
-    const rec = {toggles: toggles(ctrl), frames: ctrl.length, finishFrame: best.finish ?? null, checkpoints: best.cp, progress: best.score, wall_s: +((performance.now() - t0) / 1000).toFixed(1), note};
+    const rec = {masks: toggles(ctrl), frames: ctrl.length, finishFrame: best.finish ?? null, checkpoints: best.cp, progress: best.score, wall_s: +((performance.now() - t0) / 1000).toFixed(1), note};
     fs.writeFileSync(new URL(`./${String(histN++).padStart(3, '0')}.json`, histDir), JSON.stringify(rec));
   };
   let lastCp = -1;
   fs.writeFileSync(curvePath, 'step,seconds,tick,cp,best_score,finish_ms\n');
-  let lastBest = -Infinity, stall = 0, step = 0, finish = null, bestSeq = null;
+  let lastBest = -Infinity, everBest = -Infinity, stalls = 0, stall = 0, step = 0, finish = null, bestSeq = null;
   while (controls.length < MAXMS) {
     let best = null, bestSeqIter = null, elites = null;
     for (let it = 0; it < ITERS; it++) {
@@ -166,12 +174,15 @@ if (!isMainThread) {
     fs.appendFileSync(curvePath, `${step},${secs.toFixed(1)},${controls.length},${best.cp},${best.score.toFixed(1)},\n`);
     console.log(`step ${step} ${secs.toFixed(1)}s tick ${controls.length} cp ${best.cp} score ${best.score.toFixed(1)} pos ${best.x?.toFixed(0)},${best.y?.toFixed(0)},${best.z?.toFixed(0)} elites ${elites}`);
     // Stall: the horizon-end score should rise every step; if not, back up and widen the search.
-    if (best.score > lastBest + 1) { lastBest = best.score; stall = 0; }
+    if (best.score > lastBest + 1) { lastBest = best.score; stall = 0; if (best.score > everBest) { everBest = best.score; stalls = 0; } }
     else if (++stall >= STALL) {
-      const keep = Math.max(0, controls.length - BACK);
+      // Progressive backoff: each consecutive stall at the same place backs up further.
+      const back = Math.min(BACK * 2 ** stalls, 8000);
+      const keep = Math.max(0, controls.length - back);
+      stalls++;
       controls.length = keep;
       await broadcast({type: 'replay', controls: Uint8Array.from(controls)});
-      saveHistory(controls.concat(masksOf(bestSeqIter)), best, `stall, backed up ${BACK} ms`);
+      saveHistory(controls.concat(masksOf(bestSeqIter)), best, `stall, backed up ${back} ms`);
       probs = flat(); bestSeq = null; stall = 0; lastBest = -Infinity;
       console.log(`  stall: backed up to tick ${keep}`);
     }

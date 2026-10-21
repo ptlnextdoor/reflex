@@ -107,6 +107,7 @@ export function buildFields(map = buildMap()) {
   // Progress in metres: field value at the car's cell (nearest level), refined within the cell
   // by the direction toward the best neighbour. Off-road: nearest field cell plus a penalty.
   const cellList = [...map.cells.keys()].map(k => k.split(',').map(Number));
+  const airCache = new Map();
   function progress(g, px, py, pz) {
     const f = fields[Math.min(g, fields.length - 1)];
     const x = Math.floor(px / TILE), z = Math.floor(pz / TILE), ty = py / TILE;
@@ -114,21 +115,31 @@ export function buildFields(map = buildMap()) {
     let best = null;
     if (levels) for (const y of levels) { const d = f.get(`${x},${y},${z}`); if (d !== undefined && Math.abs(y - ty) < 1.5 && (best === null || Math.abs(y - ty) < Math.abs(best[0] - ty))) best = [y, d]; }
     if (best === null) {
-      // Not on a road cell: airborne over or beside the road is scored by the nearest cell the
-      // car could still land on (not more than 1.5 levels above it); under the road, far away.
-      let bd = Infinity, bv = 0, ud = Infinity, uv = 0;
+      // Not on a road cell. Airborne or beside the road: the best cell the car could still land
+      // on (at most 1.5 levels above it), by field value plus distance, so a flight over lower
+      // road is scored by where it lands, not by what it flies over. Under the road: trapped.
+      // ponytail: brute force over all cells, cached per metre cube (a rollout samples ~40 points).
+      const ck = `${g},${Math.round(px)},${Math.round(py)},${Math.round(pz)}`;
+      const hit = airCache.get(ck);
+      if (hit !== undefined) return hit;
+      let bd = Infinity, by = 0, ud = Infinity, uv = 0;
       for (const [cx, cz] of cellList) {
         const dh = Math.hypot((cx + 0.5) * TILE - px, (cz + 0.5) * TILE - pz);
-        if (dh >= bd && dh >= ud) continue;
+        if (dh >= ud && 2 * dh >= bd) continue;
         for (const y of map.cells.get(`${cx},${cz}`)) {
           const v = f.get(`${cx},${y},${cz}`);
           if (v === undefined) continue;
           const dy = y * TILE - py, dd = Math.hypot(dh, dy);
-          if (dy <= 1.5 * TILE) { if (dd < bd) { bd = dd; bv = v; } }
+          if (dy <= 1.5 * TILE) { if (v + 2 * dd < bd) { bd = v + 2 * dd; by = y; } }
           else if (dd < ud) { ud = dd; uv = v; }
         }
       }
-      return bd < Infinity ? bv + 2 * bd : uv + 2 * ud + 200;
+      // On the ground plane (y ~ 0) beside a raised road is a trap: no way back up without a
+      // ramp. Airborne above or beside the road is normal flight.
+      const r = bd < Infinity ? bd + (py < 1 && by > 0 ? 300 : 0) : uv + 2 * ud + 300;
+      if (airCache.size > 200000) airCache.clear();
+      airCache.set(ck, r);
+      return r;
     }
     const [y, d] = best;
     let bestN = null;
