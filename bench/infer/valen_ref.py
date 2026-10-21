@@ -69,6 +69,7 @@ def main() -> None:
     ap.add_argument("--repeats", type=int, default=3)
     ap.add_argument("--out", type=Path, default=Path("ref.jsonl"))
     ap.add_argument("--selftest", action="store_true")
+    ap.add_argument("--fp32", action="store_true", help="disable Valen's bf16 backbone autocast (true fp32 reference)")
     a = ap.parse_args()
 
     if a.selftest:
@@ -88,6 +89,8 @@ def main() -> None:
 
     t = time.perf_counter()
     model = AutoModel.from_pretrained(a.model, revision=a.revision, trust_remote_code=True, dtype="auto", attn_implementation="sdpa").to(a.device).eval()
+    if a.fp32:
+        model.backbone_autocast_dtype = None  # snapshot defaults to bf16 autocast even on CPU
     load_s = time.perf_counter() - t
     sync = torch.mps.synchronize if a.device == "mps" else (lambda: None)
 

@@ -102,3 +102,24 @@ OMP_NUM_THREADS=4 HF_HUB_OFFLINE=1 .venv/bin/python valen_mlx.py --dtype float16
 OMP_NUM_THREADS=4 HF_HUB_OFFLINE=1 .venv/bin/python valen_mlx.py --dtype bfloat16 --bench --warmup 3 --repeats 5 --out ref_mlx_bf16.jsonl --summary mlx_bf16.json
 HF_HUB_OFFLINE=1 .venv/bin/python valen_mlx.py --selftest
 ```
+
+## Reference fixed: true fp32 (coordinator, 2026-10-20)
+
+The original `ref_cpu.jsonl` was **not fp32**: Valen's snapshot runs the backbone under
+bf16 autocast even on CPU. `valen_ref.py --fp32` now disables that
+(`backbone_autocast_dtype = None`). New gate reference: `ref_cpu_fp32.jsonl`.
+
+| runtime | agreement vs true fp32 | max prob/score delta | misses |
+| --- | --- | --- | --- |
+| **MLX fp16** (`ref_mlx.jsonl`) | **32/32, 100%** | 0.0065 | none |
+| old CPU bf16-autocast ref (`ref_cpu.jsonl`) | 31/32, 96.9% | 0.0282 | 05 on_road |
+| MPS bf16 autocast (`ref_mps.jsonl`) | 30/32, 93.8% | 0.0456 | 00, 04 on_road |
+| MLX bf16 (`ref_mlx_bf16.jsonl`) | 29/32, 90.6% | 0.0329 | 00, 04, 05 on_road |
+
+So the MLX fp16 port **passes the 99% gate**; the earlier misses came from the bf16
+reference, not the port. Every bf16 path loses the noul gate; fp16 is the default.
+Same environment for all rows here (torch 2.14.1, transformers 5.20.2).
+Command: `OMP_NUM_THREADS=8 .venv/bin/python valen_ref.py --device cpu --fp32 --warmup 0 --repeats 1 --out ref_cpu_fp32.jsonl`
+
+**Current best: MLX fp16, 86.7 ms p50 end to end (82.1 ms forward), 100% agreement.
+4.9x faster than PyTorch MPS (421 ms). Text tower is 63 ms of it.**
