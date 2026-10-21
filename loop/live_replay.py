@@ -48,6 +48,7 @@ def main():
     ap.add_argument("--wr", action="store_true")
     ap.add_argument("--runs", type=int, default=3)
     ap.add_argument("--shot", action="store_true", help="save a screenshot after each run to runs/live/")
+    ap.add_argument("--video", action="store_true", help="record the headless page to runs/live/*.mp4")
     a = ap.parse_args()
     cand = "--wr" if a.wr else a.candidate
     toggles = toggles_for(cand)
@@ -60,7 +61,9 @@ def main():
         b = p.chromium.launch(headless=True, args=["--use-angle=metal", "--enable-gpu", "--ignore-gpu-blocklist",
                                                     "--disable-background-timer-throttling",
                                                     "--disable-renderer-backgrounding"])
-        ctx = b.new_context(viewport={"width": 960, "height": 540}, service_workers="block")
+        video = {"record_video_dir": str(ROOT / "runs/live/video"),
+                 "record_video_size": {"width": 960, "height": 540}} if a.video else {}
+        ctx = b.new_context(viewport={"width": 960, "height": 540}, service_workers="block", **video)
         ctx.route("**/*", lambda r: r.abort() if not r.request.url.startswith(origin + "/") else r.continue_())
         pg = ctx.new_page()
         pg.add_init_script("""
@@ -108,6 +111,13 @@ def main():
             print(json.dumps({"run": run, "finish_frames": fin}), flush=True)
             pg.keyboard.press("KeyT")  # VehicleStartReset (R = checkpoint reset)
             pg.wait_for_timeout(1500)
+        ctx.close()  # flushes the video file
+        if a.video:
+            webm = Path(pg.video.path())
+            mp4 = ROOT / f"runs/live/{Path(cand).stem.lstrip('-') or 'wr'}_{int(time.time())}.mp4"
+            subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-i", str(webm), "-c:v", "libx264",
+                            "-pix_fmt", "yuv420p", "-movflags", "+faststart", str(mp4)], check=True)
+            print(json.dumps({"video": str(mp4)}), flush=True)
         b.close()
     server.shutdown()
     print(json.dumps({"candidate": cand, "toggles": len(toggles), "finishes": results}))
