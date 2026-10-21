@@ -1,0 +1,20 @@
+{
+  "state_first": {
+    "context": 0.1033,
+    "instruction": 0.0598,
+    "candidate": 0.1168,
+    "decision": 0.0582
+  },
+  "question_first": {
+    "context": 0.0957,
+    "instruction": 0.0,
+    "candidate": 0.0,
+    "decision": 0.0629
+  },
+  "head_sensitivity_state_first": {
+    "context": 0.007,
+    "instruction": 0.002,
+    "candidate": 0.992,
+    "decision": 0.001
+  }
+}

@@ -250,3 +250,27 @@ OMP_NUM_THREADS=4 HF_HUB_OFFLINE=1 .venv/bin/python streaming.py --selftest
 OMP_NUM_THREADS=4 HF_HUB_OFFLINE=1 .venv/bin/python streaming.py
 OMP_NUM_THREADS=4 HF_HUB_OFFLINE=1 .venv/bin/python streaming.py --bench --warmup 3 --repeats 5
 ```
+
+## Why question-first streaming is image-blind (coordinator audit, 2026-10-20)
+
+Root cause is the **head architecture, not a cache or span bug.** `stream_audit.py`
+compares two frames (synth_00 vs synth_07), MLX fp16, mean relative change in each
+Mixer role vector:
+
+| order | context | instruction | **candidate** | decision |
+| --- | --- | --- | --- | --- |
+| state-first (trained) | 0.103 | 0.060 | **0.117** | 0.058 |
+| question-first | 0.096 | 0.000 | **0.000** | 0.063 |
+
+Head sensitivity in the trained order: swapping only the **candidate** role from frame B
+into frame A recovers **99.2%** of the A to B answer change; context 0.7%, decision 0.1%.
+So Valen's Mixer reads the frame almost entirely through the candidate-token
+features. Question-first puts candidates before the image, so under causal attention and
+recurrent DeltaNet they are frame-invariant (exactly 0.000 change) and the answer is
+frozen. The context and decision roles do see the frame, but the trained head ignores them.
+
+Consequence: streaming needs either (a) a head that reads the frame through the
+context/decision roles (retrain head, backbone frozen: cheap), or (b) candidate tokens
+placed after the image (no prefix reuse for them, ~60 tokens per frame). (a) is the
+architecture change worth making: it's what a control loop needs anyway.
+Command: `HF_HUB_OFFLINE=1 .venv/bin/python stream_audit.py` (output `stream_audit.json`).
