@@ -123,3 +123,20 @@ Command: `OMP_NUM_THREADS=8 .venv/bin/python valen_ref.py --device cpu --fp32 --
 
 **Current best: MLX fp16, 86.7 ms p50 end to end (82.1 ms forward), 100% agreement.
 4.9x faster than PyTorch MPS (421 ms). Text tower is 63 ms of it.**
+
+## Text-tower token scaling (coordinator, 2026-10-20)
+
+`scaling.py`: Valen text tower in MLX fp16, real weights, random embeddings (timing
+only), 3 warm-up + 15 timed per size. Command: `HF_HUB_OFFLINE=1 .venv/bin/python scaling.py`
+
+| tokens | 8 | 16 | 32 | 64 | 96 | 128 | 192 | 302 | 512 |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| p50 ms | 9.0 | 14.9 | 17.6 | 18.0 | 28.6 | 32.3 | 43.4 | 67.8 | 106.6 |
+
+Linear fit: **9.1 ms fixed + 0.19 ms/token.** At 302 tokens the per-token term is ~85%
+of the time, so cutting tokens pays off nearly proportionally. Below ~64 tokens it
+flattens at ~18 ms (launch/dispatch bound, 24 layers). Implications:
+- Question-first streaming (only ~64 visual + ~10 readout tokens per frame) predicts
+  the text tower at **~18 to 20 ms** (from 63), so ~37 ms total with the 17 ms ViT.
+- The ~9 to 18 ms floor is the 24-layer launch cost. Below it needs fused kernels
+  (sys1rust's lever) or a smaller backbone.
