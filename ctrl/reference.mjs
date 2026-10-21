@@ -40,6 +40,10 @@ export function cross(a, b) { return [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a
 export function buildReference(controls, trackName = 'summer1') {
   const {finishFrame, raw} = runAll(trackName, controls);
   const n = finishFrame ?? controls.length;
+  // Goal: the finish if the line finishes, else the last checkpoint index the line reaches
+  // (a segment reference, e.g. ctrl/segment.json ends at checkpoint 1).
+  const lastState = decodeState(raw, n - 1);
+  const goal = finishFrame ? {finish: true} : {finish: false, checkpoint: lastState.nextCheckpointIndex};
   const pos = new Float64Array(3 * n), fwd = new Float64Array(3 * n), left = new Float64Array(3 * n), up = new Float64Array(3 * n);
   const speed = new Float64Array(n), snorm = new Float64Array(n), airborne = new Uint8Array(n);
   const keys = new Uint8Array(n);
@@ -55,5 +59,5 @@ export function buildReference(controls, trackName = 'summer1') {
     s = slew(s, steerTarget(controls[i]));
     snorm[i] = s;
   }
-  return {n, finishFrame, pos, fwd, left, up, speed, snorm, airborne, keys, controls};
+  return {n, finishFrame, goal, pos, fwd, left, up, speed, snorm, airborne, keys, controls};
 }

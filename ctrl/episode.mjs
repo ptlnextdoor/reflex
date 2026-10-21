@@ -20,7 +20,7 @@ export function episode(ref, {latency = 60, jitter = 2, noise = 0.05, headingNoi
   const car = new Car(track);
   const ctrl = new Controller(ref, {latency, dt, params});
   const r = rng(seed);
-  const horizon = ref.n + 5000;
+  const horizon = ref.n + (ref.goal.finish ? 5000 : 1500);
   // Observation history: pos(3), fwd(3), up(3), speed per executed tick.
   const hist = new Float64Array(10 * (horizon + dt));
   const planned = new Uint8Array(horizon + 2 * dt);
@@ -95,7 +95,7 @@ export function episode(ref, {latency = 60, jitter = 2, noise = 0.05, headingNoi
         hist[h + 6] = u[0]; hist[h + 7] = u[1]; hist[h + 8] = u[2];
         hist[h + 9] = st.speedKmh / 3.6;
         executed++;
-        if (st.finished) { finish = st.finishFrames; break; }
+        if (ref.goal.finish ? st.finished : st.nextCheckpointIndex >= ref.goal.checkpoint) { finish = ref.goal.finish ? st.finishFrames : t + 1; break; }
         // Abort when hopelessly off the line: distance from the controller's matched progress point.
         if ((t & 63) === 0 && t > latency) {
           const j = Math.min(ref.n - 1, Math.max(0, ctrl.iObs + latency));
