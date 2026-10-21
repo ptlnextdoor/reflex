@@ -19,6 +19,10 @@ interface between the harness and the desktop, the game and the controls,
 - Render runs on `requestAnimationFrame`. This Mac's display is 120 Hz (8.3 ms/frame).
 - Official tracks live at `tracks/official/<name>.track` (Summer 1, Winter, Desert...).
 - Finish times are integer milliseconds (`numberOfFrames`).
+- The in-game ghost feature serves full input recordings over a read-only GET
+  (`vps.kodub.com/v6/recordings?ids=`). Summer 1 world record: **22.123 s** (22123 frames,
+  2026-10-09), top 5 within 147 ms, 7.0M entries. That recording is the parity test for
+  the sim (must finish at exactly frame 22123) and the seed for the optimizer.
 
 Consequence: the perfect run is a list of key events with 1 ms timestamps. Humans lose
 to that list in two places: the **line** (which inputs) and the **execution** (when).
@@ -110,9 +114,11 @@ leaderboard**, since that would bump real players.
 5. Closed loop L0 + L1. **Number: real finish ms and its variance across 20 runs.**
 6. L2 + L3 loops on. **Number: finish ms per session, held-out tracks.**
 
-P(beating the top human time on one short official track by step 5) ~ 0.35 to 0.5.
-Most likely failure: the optimizer can't find world-record-class lines (human records
-here may already be near-TAS), not latency.
+Target: beat 22.123 s on Summer 1, live, from pixels. Strategy: seed the optimizer with
+the WR inputs and search nearby (TAS-style), so we start at human-best and only need
+to find a few ms. P(sim line under 22.123 s) ~ 0.75. P(executing it live from pixels
+under 22.123 s) ~ 0.35 to 0.5. Most likely failure: live timing jitter, since a
+WR-class line has almost no margin; the jitter-robust scoring above is the counter.
 
 Skipped until a step needs it: Laya/Jev menu navigation (fixed key sequence works first),
 GSD `.planning/` (this file is the plan), an RL policy (feedforward plan + feedback beats
