@@ -1,5 +1,5 @@
 {
- "refPath": "ctrl/segment.json",
+ "refPath": "ctrl/lines/segment.json",
  "refTime": 4752,
  "goal": {
   "finish": false,

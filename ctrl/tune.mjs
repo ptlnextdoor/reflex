@@ -1,7 +1,7 @@
 // Gain search: random/local search over controller params, scored on a seed set, kept only if
 // the held-out seed set also improves. Score = finish rate first, then p50 finish time.
 //
-//   node ctrl/tune.mjs --ref ctrl/segment.json --iters 40 --cells headline
+//   node ctrl/tune.mjs --ref ctrl/lines/segment.json --iters 40 --cells headline
 //   node ctrl/tune.mjs --cells stress        # L in {60,90}, jitter in {2,5}, noise in {0.05,0.2}
 //   node ctrl/tune.mjs --init ctrl/best_params.json --out ctrl/best_params.json
 import fs from 'node:fs';

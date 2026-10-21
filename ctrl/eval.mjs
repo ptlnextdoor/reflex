@@ -2,12 +2,13 @@
 // Parallel over worker_threads (one sim instance per worker). Prints a table and writes JSON.
 //
 //   node ctrl/eval.mjs                       # headline cell + main grid, 20 seeds, reference auto
-//   node ctrl/eval.mjs --ref ctrl/segment.json --seeds 20 --params ctrl/best_params.json
+//   node ctrl/eval.mjs --ref ctrl/lines/segment.json --seeds 20 --params ctrl/best_params.json
 //   node ctrl/eval.mjs --cell 60,2,0.05      # one cell
+//   node ctrl/eval.mjs --motion               # heading derived from observed motion (box-only perception)
 //   node ctrl/eval.mjs --out ctrl/results/grid.json
 //
 // Reference auto-selection: learn/best.json (Reflex-1's own planner) when present, else
-// ctrl/segment.json (own start-to-checkpoint-1 segment). Never a human run (LOOP.md isolation).
+// ctrl/lines/segment.json (own start-to-checkpoint-1 segment). Never a human run (LOOP.md isolation).
 import fs from 'node:fs';
 import os from 'node:os';
 import {Worker, isMainThread, parentPort, workerData} from 'node:worker_threads';
@@ -19,7 +20,7 @@ export const HEADLINE = {latency: 60, jitter: 2, noise: 0.05};
 
 export function pickReference(explicit) {
   if (explicit) return explicit;
-  for (const p of ['learn/best.json', 'ctrl/segment.json']) if (fs.existsSync(new URL(`../${p}`, import.meta.url))) return p;
+  for (const p of ['learn/best.json', 'ctrl/lines/segment.json']) if (fs.existsSync(new URL(`../${p}`, import.meta.url))) return p;
   throw Error('no reference line: run `node ctrl/segment.mjs` or wait for learn/best.json');
 }
 
@@ -60,7 +61,7 @@ if (!isMainThread) {
   const cell = arg('--cell');
   const cells = cell ? [Object.fromEntries(['latency', 'jitter', 'noise'].map((k, i) => [k, Number(cell.split(',')[i])]))]
     : [HEADLINE, ...LATENCIES.flatMap(latency => JITTERS.flatMap(jitter => NOISES.map(noise => ({latency, jitter, noise}))))];
-  const jobs = cells.flatMap(c => Array.from({length: seeds}, (_, s) => ({...c, seed: 1000 + s, params})));
+  const jobs = cells.flatMap(c => Array.from({length: seeds}, (_, s) => ({...c, seed: 1000 + s, params, headingSource: process.argv.includes('--motion') ? 'motion' : 'exact'})));
   const {loadLine, buildReference, WR_FRAMES} = await import('./reference.mjs');
   const ref = buildReference(loadLine(new URL(`../${refPath}`, import.meta.url)));
   console.log(`reference ${refPath}: ${ref.n} ms, goal ${ref.goal.finish ? 'finish' : 'checkpoint ' + ref.goal.checkpoint}; params ${JSON.stringify(params)}; ${cells.length} cells x ${seeds} seeds`);

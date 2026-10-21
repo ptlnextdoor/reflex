@@ -12,7 +12,7 @@ run touches this directory: `python3 loop/isolation.py ctrl` passes (LOOP.md iso
 | `sim.mjs` | per-ms stepper (`Car.step(mask)`), whole-heap snapshot/restore (23 MB, 0.6 ms) |
 | `check.mjs` | parity vs `sim.run` on synthetic controls, snapshot/restore, throughput |
 | `reference.mjs` | `loadLine()` reads `learn/best.json` ({controls} or {toggles}); `buildReference()` runs it once, keeps per-ms pose, speed, keys, steering state, contacts |
-| `segment.mjs` | temporary own reference: hand-written steer-to-waypoint rule, start pose to checkpoint 1 in 4752 ms (`segment.json`) |
+| `segment.mjs` | temporary own reference: hand-written steer-to-waypoint rule, start pose to checkpoint 1 in 4752 ms (`lines/segment.json`); `lines/segment_fast.json` is the same rule with deadband 0.08, lookahead 40 (4030 ms) |
 | `controller.mjs` | v1 tracking controller (below) |
 | `episode.mjs` | closed loop: delayed noisy observation, 8 ms control step, per-toggle key jitter |
 | `eval.mjs` | parallel grid (worker_threads), 740 episodes in 4.5 s on 13 threads |
@@ -40,15 +40,15 @@ With zero gains and zero noise the loop reproduces the reference tick-for-tick a
 Rejected on measurement: lateral-velocity damping `Kvy` (worse at every value tried),
 speed-scaled gains (`speedExp`, no gain), deadbands above 0.01 (collapse the finish rate).
 
-## Iteration log (reference: `ctrl/segment.json`, own line, goal = checkpoint 1 at 4752 ms)
+## Iteration log (reference: `ctrl/lines/segment.json`, own line, goal = checkpoint 1 at 4752 ms)
 
 Headline cell = latency 60 ms, key jitter +/-2 ms, position noise 0.05 m (Gaussian per axis),
 20 seeds. "p50" is the median time to reach the goal; negative delta = faster than the line.
 
 | # | change | headline finish | headline p50 (delta vs ref) | full grid | command |
 | --- | --- | --- | --- | --- | --- |
-| 1 | v1 defaults Ky 0.6, Kpsi 8 | 20/20 | 4715 (-37) | 33/36 cells at 20/20, worst 18/20 (L60 j5 n0.2) | `node ctrl/eval.mjs --ref ctrl/segment.json --seeds 20` |
-| 2 | tune.mjs, 30 iters on 8 stress cells, held-out seeds: Ky 0.278, Kpsi 6.19, deadband 0.0033 | 20/20 | 4689 (-63) | 35/36 cells at 20/20, worst 19/20 (L90 j5 n0.05) | `node ctrl/tune.mjs --ref ctrl/segment.json --cells stress --iters 30 --seeds 10` then `node ctrl/eval.mjs --ref ctrl/segment.json --seeds 20 --params ctrl/best_params.json --out ctrl/results/grid_segment.json` |
+| 1 | v1 defaults Ky 0.6, Kpsi 8 | 20/20 | 4715 (-37) | 33/36 cells at 20/20, worst 18/20 (L60 j5 n0.2) | `node ctrl/eval.mjs --ref ctrl/lines/segment.json --seeds 20` |
+| 2 | tune.mjs, 30 iters on 8 stress cells, held-out seeds: Ky 0.278, Kpsi 6.19, deadband 0.0033 | 20/20 | 4689 (-63) | 35/36 cells at 20/20, worst 19/20 (L90 j5 n0.05) | `node ctrl/tune.mjs --ref ctrl/lines/segment.json --cells stress --iters 30 --seeds 10` then `node ctrl/eval.mjs --ref ctrl/lines/segment.json --seeds 20 --params ctrl/best_params.json --out ctrl/results/grid_segment.json` |
 
 Full grid for row 2 (finish/20, p50 ms):
 
@@ -62,12 +62,14 @@ Full grid for row 2 (finish/20, p50 ms):
 Why the loop is faster than its own open-loop line: the segment line is a cautious bang-bang
 steer-to-waypoint rule that scrubs speed in the bend; the tracking controller's heading term
 smooths the same path and carries more speed. This is a property of the weak temporary
-reference, not something to expect against a planner-optimized line.
+reference, not something to expect against a planner-optimized line. On a faster own segment
+(same rule, wider deadband and lookahead, cp1 at 4030 ms, `ctrl/lines/segment_fast.json`)
+the loop tracks it to within +0 to +3 ms p50 in every cell, 36/36 cells at 20/20.
 
 ## Perception spec (what the vision model must deliver)
 
 Sweep of one axis at a time, others at the headline values, 20 seeds, >= 90% finish kept
-(`node ctrl/spec.mjs --ref ctrl/segment.json --seeds 20 --params ctrl/best_params.json --out ctrl/results/spec_segment.json`):
+(`node ctrl/spec.mjs --ref ctrl/lines/segment.json --seeds 20 --params ctrl/best_params.json --out ctrl/results/spec_segment.json`):
 
 | axis | 20/20 up to | >= 90% up to | collapses by |
 | --- | --- | --- | --- |
@@ -75,6 +77,12 @@ Sweep of one axis at a time, others at the headline values, 20 seeds, >= 90% fin
 | white position noise (m, 1 sigma per axis) | 1.2 | > 1.2 | not reached |
 | constant position bias (m) | 0.25 | 1.0 (18/20) | 2.0 (11/20) |
 | heading noise (rad, 1 sigma) | 0.2 | 0.2 | 0.3 (14/20) |
+| latency estimate error (ms, true minus assumed) | -40 to +20 | +80 (19/20) | not reached |
+| per-frame latency jitter (ms, uniform +/-) | 32 | 32 | not reached (p50 +39 ms at 32) |
+
+Latency error is asymmetric: compensating too much (true latency shorter than assumed) is
+free, compensating too little costs time (p50 +242 ms at +80). So the live loop should assume
+its p90 latency, not its p50.
 
 Heading from motion only (no orientation output from the model; heading = chord of the last
 ~1.5 m of noisy positions): headline cell 19/20 at noise 0.05, 20/20 at 0.1, 19/20 at 0.2.

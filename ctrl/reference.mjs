@@ -41,7 +41,7 @@ export function buildReference(controls, trackName = 'summer1') {
   const {finishFrame, raw} = runAll(trackName, controls);
   const n = finishFrame ?? controls.length;
   // Goal: the finish if the line finishes, else the last checkpoint index the line reaches
-  // (a segment reference, e.g. ctrl/segment.json ends at checkpoint 1).
+  // (a segment reference, e.g. ctrl/lines/segment.json ends at checkpoint 1).
   const lastState = decodeState(raw, n - 1);
   const goal = finishFrame ? {finish: true} : {finish: false, checkpoint: lastState.nextCheckpointIndex};
   const pos = new Float64Array(3 * n), fwd = new Float64Array(3 * n), left = new Float64Array(3 * n), up = new Float64Array(3 * n);

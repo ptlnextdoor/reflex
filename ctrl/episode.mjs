@@ -14,7 +14,9 @@ export function rng(seed) {
   return {next, gauss};
 }
 
-export function episode(ref, {latency = 60, jitter = 2, noise = 0.05, bias = 0, headingNoise = 0, speedNoise = 0, headingSource = 'exact', seed = 1, params = {}, dt = 8, trace = null, track = 'summer1', abortDistance = 15, warm = 0} = {}) {
+export function episode(ref, {latency = 60, latencyError = 0, latencyJitter = 0, jitter = 2, noise = 0.05, bias = 0, headingNoise = 0, speedNoise = 0, headingSource = 'exact', seed = 1, params = {}, dt = 8, trace = null, track = 'summer1', abortDistance = 15, warm = 0} = {}) {
+  // latencyError: the controller compensates `latency` but the true observation age is
+  // latency + latencyError (constant). latencyJitter: per-frame true age varies by U(-j, j) ms.
   // warm: ticks driven open-loop with the exact reference keys (no jitter) before closing the
   // loop, to evaluate the controller on a later section of the track.
   // bias: constant per-episode position offset of this magnitude (m) in a random horizontal
@@ -40,7 +42,8 @@ export function episode(ref, {latency = 60, jitter = 2, noise = 0.05, bias = 0, 
     for (let k = 0; ; k++) {
       const tk = k * dt;
       if (tk >= horizon) break;
-      const tObs = tk - latency;
+      const trueAge = Math.max(1, latency + latencyError + (latencyJitter ? Math.round((r.next() * 2 - 1) * latencyJitter) : 0));
+      const tObs = tk - trueAge;
       let masks;
       if (tObs < 0 || tObs >= executed || tk < warm) {
         // No observation yet (or warm-up): open-loop reference keys.

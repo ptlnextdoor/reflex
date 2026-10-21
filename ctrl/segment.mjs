@@ -3,7 +3,7 @@
 // my own key probes (ctrl/scratch, throttle plus one steer nudge): the road bends from heading
 // -90 deg to about -107 deg near x=300, then back to -90 deg by x=220, cp1 at about (182, 55, -5).
 // Used only to unit-test the controller machinery until learn/best.json exists.
-//   node ctrl/segment.mjs   -> writes ctrl/segment.json {controls, frames, checkpoint}
+//   node ctrl/segment.mjs   -> writes ctrl/lines/segment.json {controls, frames, checkpoint}
 import fs from 'node:fs';
 import {Car, decodeState} from './sim.mjs';
 import {forwardOf} from './reference.mjs';
@@ -42,6 +42,6 @@ export function segmentLine({horizon = 7000, deadband = 0.03, lookahead = 12} = 
 if (process.argv[1] === new URL(import.meta.url).pathname) {
   const {controls, checkpoint} = segmentLine();
   if (!checkpoint) throw Error('segment line did not reach checkpoint 1');
-  fs.writeFileSync(new URL('./segment.json', import.meta.url), JSON.stringify({controls: [...controls], frames: controls.length, checkpoint}));
-  console.log(`segment line reaches checkpoint 1 at ${checkpoint} ms, ${controls.length} controls -> ctrl/segment.json`);
+  fs.writeFileSync(new URL('./lines/segment.json', import.meta.url), JSON.stringify({controls: [...controls], frames: controls.length, checkpoint}));
+  console.log(`segment line reaches checkpoint 1 at ${checkpoint} ms, ${controls.length} controls -> ctrl/lines/segment.json`);
 }
