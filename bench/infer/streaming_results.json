@@ -1,0 +1,1154 @@
+{
+  "revision": "c2c481fcb319bd9ae834abc7c6373271710cf24e",
+  "dtype": "float16",
+  "tokens": {
+    "total": 302,
+    "cached_prefix": 184,
+    "per_frame": 118,
+    "context": 91,
+    "readout": 27,
+    "visual": 66
+  },
+  "versions": {
+    "mlx": "0.32.4",
+    "mlx-vlm": "0.7.9",
+    "torch": "2.14.1",
+    "transformers": "5.20.2"
+  },
+  "cache_vs_uncached": {
+    "passed": 32,
+    "total": 32,
+    "fraction": 1.0,
+    "max_probability_delta": 0.0007299428846696543,
+    "failures": []
+  },
+  "cache_per_question": {
+    "steer": {
+      "passed": 8,
+      "total": 8,
+      "fraction": 1.0,
+      "max_probability_delta": 0.00020178413173121967,
+      "failures": []
+    },
+    "throttle": {
+      "passed": 8,
+      "total": 8,
+      "fraction": 1.0,
+      "max_probability_delta": 0.0005045281139754998,
+      "failures": []
+    },
+    "on_road": {
+      "passed": 8,
+      "total": 8,
+      "fraction": 1.0,
+      "max_probability_delta": 6.739957929646767e-05,
+      "failures": []
+    },
+    "risk": {
+      "passed": 8,
+      "total": 8,
+      "fraction": 1.0,
+      "max_probability_delta": 0.0007299428846696543,
+      "failures": []
+    }
+  },
+  "zero_shot_vs_state_first_fp32": {
+    "passed": 15,
+    "total": 32,
+    "fraction": 0.46875,
+    "max_probability_delta": 0.3965888117540314,
+    "failures": [
+      {
+        "frame": "synth_00.png",
+        "question": "steer",
+        "actual": {
+          "type": "choice",
+          "probabilities": {
+            "left": 0.20547619196630668,
+            "straight": 0.6238741054459873,
+            "right": 0.170649702587706
+          },
+          "choice": "straight",
+          "confidence": 0.43581115816898097
+        },
+        "reference": {
+          "type": "choice",
+          "probabilities": {
+            "left": 0.4081977599711895,
+            "straight": 0.22728529369195596,
+            "right": 0.3645169463368545
+          },
+          "choice": "left",
+          "confidence": 0.11229663995678428
+        }
+      },
+      {
+        "frame": "synth_00.png",
+        "question": "on_road",
+        "actual": {
+          "type": "noul",
+          "noul": 0.611110508441925
+        },
+        "reference": {
+          "type": "noul",
+          "noul": 0.6505219534195051
+        }
+      },
+      {
+        "frame": "synth_00.png",
+        "question": "risk",
+        "actual": {
+          "type": "score",
+          "probabilities": {
+            "0": 0.819058219521332,
+            "1": 0.11627137479010177,
+            "2": 0.046040950710074455,
+            "3": 0.018629454978491795
+          },
+          "score": 0.26424164114572607,
+          "legend": {
+            "0": "Very unlikely",
+            "1": "Possible",
+            "2": "Likely",
+            "3": "Almost certain"
+          },
+          "confidence": 0.735758358854274
+        },
+        "reference": {
+          "type": "score",
+          "probabilities": {
+            "0": 0.7129957808739651,
+            "1": 0.1553365468110246,
+            "2": 0.08632114690395346,
+            "3": 0.045346525411056826
+          },
+          "score": 0.464018416852102,
+          "legend": {
+            "0": "Very unlikely",
+            "1": "Possible",
+            "2": "Likely",
+            "3": "Almost certain"
+          },
+          "confidence": 0.535981583147898
+        }
+      },
+      {
+        "frame": "synth_01.png",
+        "question": "on_road",
+        "actual": {
+          "type": "noul",
+          "noul": 0.6113071027787657
+        },
+        "reference": {
+          "type": "noul",
+          "noul": 0.6574975252151489
+        }
+      },
+      {
+        "frame": "synth_01.png",
+        "question": "risk",
+        "actual": {
+          "type": "score",
+          "probabilities": {
+            "0": 0.8190777514337019,
+            "1": 0.11631175533779531,
+            "2": 0.04599407024250501,
+            "3": 0.01861642298599783
+          },
+          "score": 0.2641491647807988,
+          "legend": {
+            "0": "Very unlikely",
+            "1": "Possible",
+            "2": "Likely",
+            "3": "Almost certain"
+          },
+          "confidence": 0.7358508352192012
+        },
+        "reference": {
+          "type": "score",
+          "probabilities": {
+            "0": 0.7386339930394068,
+            "1": 0.14071041398015027,
+            "2": 0.07877708255789087,
+            "3": 0.04187851042255204
+          },
+          "score": 0.42390011036358816,
+          "legend": {
+            "0": "Very unlikely",
+            "1": "Possible",
+            "2": "Likely",
+            "3": "Almost certain"
+          },
+          "confidence": 0.5760998896364118
+        }
+      },
+      {
+        "frame": "synth_02.png",
+        "question": "on_road",
+        "actual": {
+          "type": "noul",
+          "noul": 0.6110707339325329
+        },
+        "reference": {
+          "type": "noul",
+          "noul": 0.6869081650105665
+        }
+      },
+      {
+        "frame": "synth_02.png",
+        "question": "risk",
+        "actual": {
+          "type": "score",
+          "probabilities": {
+            "0": 0.8189306335424132,
+            "1": 0.11635588217858116,
+            "2": 0.04607821671365031,
+            "3": 0.018635267565355332
+          },
+          "score": 0.2644181183019478,
+          "legend": {
+            "0": "Very unlikely",
+            "1": "Possible",
+            "2": "Likely",
+            "3": "Almost certain"
+          },
+          "confidence": 0.7355818816980522
+        },
+        "reference": {
+          "type": "score",
+          "probabilities": {
+            "0": 0.7460567410741503,
+            "1": 0.13830530746508618,
+            "2": 0.07681450304995852,
+            "3": 0.03882344841080493
+          },
+          "score": 0.408404658797418,
+          "legend": {
+            "0": "Very unlikely",
+            "1": "Possible",
+            "2": "Likely",
+            "3": "Almost certain"
+          },
+          "confidence": 0.5915953412025821
+        }
+      },
+      {
+        "frame": "synth_03.png",
+        "question": "on_road",
+        "actual": {
+          "type": "noul",
+          "noul": 0.6112938523292542
+        },
+        "reference": {
+          "type": "noul",
+          "noul": 0.6946150271479794
+        }
+      },
+      {
+        "frame": "synth_03.png",
+        "question": "risk",
+        "actual": {
+          "type": "score",
+          "probabilities": {
+            "0": 0.8188419113259229,
+            "1": 0.1164104086418522,
+            "2": 0.046088362687592505,
+            "3": 0.018659317344632446
+          },
+          "score": 0.26456508605093454,
+          "legend": {
+            "0": "Very unlikely",
+            "1": "Possible",
+            "2": "Likely",
+            "3": "Almost certain"
+          },
+          "confidence": 0.7354349139490655
+        },
+        "reference": {
+          "type": "score",
+          "probabilities": {
+            "0": 0.7573541261748573,
+            "1": 0.13236830882042072,
+            "2": 0.07293204082302673,
+            "3": 0.037345524181695205
+          },
+          "score": 0.3902689630115598,
+          "legend": {
+            "0": "Very unlikely",
+            "1": "Possible",
+            "2": "Likely",
+            "3": "Almost certain"
+          },
+          "confidence": 0.6097310369884402
+        }
+      },
+      {
+        "frame": "synth_04.png",
+        "question": "on_road",
+        "actual": {
+          "type": "noul",
+          "noul": 0.6114004668176035
+        },
+        "reference": {
+          "type": "noul",
+          "noul": 0.6460010409355164
+        }
+      },
+      {
+        "frame": "synth_04.png",
+        "question": "risk",
+        "actual": {
+          "type": "score",
+          "probabilities": {
+            "0": 0.8190577136974856,
+            "1": 0.11632242205414353,
+            "2": 0.04600378930946165,
+            "3": 0.018616074938909197
+          },
+          "score": 0.2641782254897944,
+          "legend": {
+            "0": "Very unlikely",
+            "1": "Possible",
+            "2": "Likely",
+            "3": "Almost certain"
+          },
+          "confidence": 0.7358217745102056
+        },
+        "reference": {
+          "type": "score",
+          "probabilities": {
+            "0": 0.7604314627058721,
+            "1": 0.12927466055832262,
+            "2": 0.07212330166378145,
+            "3": 0.038170575072023746
+          },
+          "score": 0.38803298910195677,
+          "legend": {
+            "0": "Very unlikely",
+            "1": "Possible",
+            "2": "Likely",
+            "3": "Almost certain"
+          },
+          "confidence": 0.6119670108980433
+        }
+      },
+      {
+        "frame": "synth_05.png",
+        "question": "on_road",
+        "actual": {
+          "type": "noul",
+          "noul": 0.6114112734794617
+        },
+        "reference": {
+          "type": "noul",
+          "noul": 0.7173847556114197
+        }
+      },
+      {
+        "frame": "synth_05.png",
+        "question": "risk",
+        "actual": {
+          "type": "score",
+          "probabilities": {
+            "0": 0.8188666073569366,
+            "1": 0.11645735857807522,
+            "2": 0.046032096637762296,
+            "3": 0.01864393742722587
+          },
+          "score": 0.2644533641352774,
+          "legend": {
+            "0": "Very unlikely",
+            "1": "Possible",
+            "2": "Likely",
+            "3": "Almost certain"
+          },
+          "confidence": 0.7355466358647226
+        },
+        "reference": {
+          "type": "score",
+          "probabilities": {
+            "0": 0.7862692895620476,
+            "1": 0.11875885459574637,
+            "2": 0.06286449589883172,
+            "3": 0.032107359943374394
+          },
+          "score": 0.340809926223533,
+          "legend": {
+            "0": "Very unlikely",
+            "1": "Possible",
+            "2": "Likely",
+            "3": "Almost certain"
+          },
+          "confidence": 0.659190073776467
+        }
+      },
+      {
+        "frame": "synth_06.png",
+        "question": "on_road",
+        "actual": {
+          "type": "noul",
+          "noul": 0.611610614561402
+        },
+        "reference": {
+          "type": "noul",
+          "noul": 0.7414054053602992
+        }
+      },
+      {
+        "frame": "synth_06.png",
+        "question": "risk",
+        "actual": {
+          "type": "score",
+          "probabilities": {
+            "0": 0.8196623600161121,
+            "1": 0.11608733626002828,
+            "2": 0.045759012594189914,
+            "3": 0.018491291129669622
+          },
+          "score": 0.26307923483741696,
+          "legend": {
+            "0": "Very unlikely",
+            "1": "Possible",
+            "2": "Likely",
+            "3": "Almost certain"
+          },
+          "confidence": 0.7369207651625831
+        },
+        "reference": {
+          "type": "score",
+          "probabilities": {
+            "0": 0.7601694720907746,
+            "1": 0.12923550028046218,
+            "2": 0.07163058646184564,
+            "3": 0.03896444116691763
+          },
+          "score": 0.38938999670490637,
+          "legend": {
+            "0": "Very unlikely",
+            "1": "Possible",
+            "2": "Likely",
+            "3": "Almost certain"
+          },
+          "confidence": 0.6106100032950936
+        }
+      },
+      {
+        "frame": "synth_07.png",
+        "question": "on_road",
+        "actual": {
+          "type": "noul",
+          "noul": 0.6112995743751526
+        },
+        "reference": {
+          "type": "noul",
+          "noul": 0.7758955590693819
+        }
+      },
+      {
+        "frame": "synth_07.png",
+        "question": "risk",
+        "actual": {
+          "type": "score",
+          "probabilities": {
+            "0": 0.8195780775868935,
+            "1": 0.11603252114222298,
+            "2": 0.045862680284345585,
+            "3": 0.018526720986537893
+          },
+          "score": 0.26333804467052785,
+          "legend": {
+            "0": "Very unlikely",
+            "1": "Possible",
+            "2": "Likely",
+            "3": "Almost certain"
+          },
+          "confidence": 0.7366619553294722
+        },
+        "reference": {
+          "type": "score",
+          "probabilities": {
+            "0": 0.7295980967998718,
+            "1": 0.14469986992292252,
+            "2": 0.08081130593108417,
+            "3": 0.04489072734612159
+          },
+          "score": 0.44099466382345565,
+          "legend": {
+            "0": "Very unlikely",
+            "1": "Possible",
+            "2": "Likely",
+            "3": "Almost certain"
+          },
+          "confidence": 0.5590053361765444
+        }
+      }
+    ]
+  },
+  "zero_shot_per_question": {
+    "steer": {
+      "passed": 7,
+      "total": 8,
+      "fraction": 0.875,
+      "max_probability_delta": 0.3965888117540314,
+      "failures": [
+        {
+          "frame": "synth_00.png",
+          "question": "steer",
+          "actual": {
+            "type": "choice",
+            "probabilities": {
+              "left": 0.20547619196630668,
+              "straight": 0.6238741054459873,
+              "right": 0.170649702587706
+            },
+            "choice": "straight",
+            "confidence": 0.43581115816898097
+          },
+          "reference": {
+            "type": "choice",
+            "probabilities": {
+              "left": 0.4081977599711895,
+              "straight": 0.22728529369195596,
+              "right": 0.3645169463368545
+            },
+            "choice": "left",
+            "confidence": 0.11229663995678428
+          }
+        }
+      ]
+    },
+    "throttle": {
+      "passed": 8,
+      "total": 8,
+      "fraction": 1.0,
+      "max_probability_delta": 0.3249745816169892,
+      "failures": []
+    },
+    "on_road": {
+      "passed": 0,
+      "total": 8,
+      "fraction": 0.0,
+      "max_probability_delta": 0.1645959846942293,
+      "failures": [
+        {
+          "frame": "synth_00.png",
+          "question": "on_road",
+          "actual": {
+            "type": "noul",
+            "noul": 0.611110508441925
+          },
+          "reference": {
+            "type": "noul",
+            "noul": 0.6505219534195051
+          }
+        },
+        {
+          "frame": "synth_01.png",
+          "question": "on_road",
+          "actual": {
+            "type": "noul",
+            "noul": 0.6113071027787657
+          },
+          "reference": {
+            "type": "noul",
+            "noul": 0.6574975252151489
+          }
+        },
+        {
+          "frame": "synth_02.png",
+          "question": "on_road",
+          "actual": {
+            "type": "noul",
+            "noul": 0.6110707339325329
+          },
+          "reference": {
+            "type": "noul",
+            "noul": 0.6869081650105665
+          }
+        },
+        {
+          "frame": "synth_03.png",
+          "question": "on_road",
+          "actual": {
+            "type": "noul",
+            "noul": 0.6112938523292542
+          },
+          "reference": {
+            "type": "noul",
+            "noul": 0.6946150271479794
+          }
+        },
+        {
+          "frame": "synth_04.png",
+          "question": "on_road",
+          "actual": {
+            "type": "noul",
+            "noul": 0.6114004668176035
+          },
+          "reference": {
+            "type": "noul",
+            "noul": 0.6460010409355164
+          }
+        },
+        {
+          "frame": "synth_05.png",
+          "question": "on_road",
+          "actual": {
+            "type": "noul",
+            "noul": 0.6114112734794617
+          },
+          "reference": {
+            "type": "noul",
+            "noul": 0.7173847556114197
+          }
+        },
+        {
+          "frame": "synth_06.png",
+          "question": "on_road",
+          "actual": {
+            "type": "noul",
+            "noul": 0.611610614561402
+          },
+          "reference": {
+            "type": "noul",
+            "noul": 0.7414054053602992
+          }
+        },
+        {
+          "frame": "synth_07.png",
+          "question": "on_road",
+          "actual": {
+            "type": "noul",
+            "noul": 0.6112995743751526
+          },
+          "reference": {
+            "type": "noul",
+            "noul": 0.7758955590693819
+          }
+        }
+      ]
+    },
+    "risk": {
+      "passed": 0,
+      "total": 8,
+      "fraction": 0.0,
+      "max_probability_delta": 0.10606243864736686,
+      "failures": [
+        {
+          "frame": "synth_00.png",
+          "question": "risk",
+          "actual": {
+            "type": "score",
+            "probabilities": {
+              "0": 0.819058219521332,
+              "1": 0.11627137479010177,
+              "2": 0.046040950710074455,
+              "3": 0.018629454978491795
+            },
+            "score": 0.26424164114572607,
+            "legend": {
+              "0": "Very unlikely",
+              "1": "Possible",
+              "2": "Likely",
+              "3": "Almost certain"
+            },
+            "confidence": 0.735758358854274
+          },
+          "reference": {
+            "type": "score",
+            "probabilities": {
+              "0": 0.7129957808739651,
+              "1": 0.1553365468110246,
+              "2": 0.08632114690395346,
+              "3": 0.045346525411056826
+            },
+            "score": 0.464018416852102,
+            "legend": {
+              "0": "Very unlikely",
+              "1": "Possible",
+              "2": "Likely",
+              "3": "Almost certain"
+            },
+            "confidence": 0.535981583147898
+          }
+        },
+        {
+          "frame": "synth_01.png",
+          "question": "risk",
+          "actual": {
+            "type": "score",
+            "probabilities": {
+              "0": 0.8190777514337019,
+              "1": 0.11631175533779531,
+              "2": 0.04599407024250501,
+              "3": 0.01861642298599783
+            },
+            "score": 0.2641491647807988,
+            "legend": {
+              "0": "Very unlikely",
+              "1": "Possible",
+              "2": "Likely",
+              "3": "Almost certain"
+            },
+            "confidence": 0.7358508352192012
+          },
+          "reference": {
+            "type": "score",
+            "probabilities": {
+              "0": 0.7386339930394068,
+              "1": 0.14071041398015027,
+              "2": 0.07877708255789087,
+              "3": 0.04187851042255204
+            },
+            "score": 0.42390011036358816,
+            "legend": {
+              "0": "Very unlikely",
+              "1": "Possible",
+              "2": "Likely",
+              "3": "Almost certain"
+            },
+            "confidence": 0.5760998896364118
+          }
+        },
+        {
+          "frame": "synth_02.png",
+          "question": "risk",
+          "actual": {
+            "type": "score",
+            "probabilities": {
+              "0": 0.8189306335424132,
+              "1": 0.11635588217858116,
+              "2": 0.04607821671365031,
+              "3": 0.018635267565355332
+            },
+            "score": 0.2644181183019478,
+            "legend": {
+              "0": "Very unlikely",
+              "1": "Possible",
+              "2": "Likely",
+              "3": "Almost certain"
+            },
+            "confidence": 0.7355818816980522
+          },
+          "reference": {
+            "type": "score",
+            "probabilities": {
+              "0": 0.7460567410741503,
+              "1": 0.13830530746508618,
+              "2": 0.07681450304995852,
+              "3": 0.03882344841080493
+            },
+            "score": 0.408404658797418,
+            "legend": {
+              "0": "Very unlikely",
+              "1": "Possible",
+              "2": "Likely",
+              "3": "Almost certain"
+            },
+            "confidence": 0.5915953412025821
+          }
+        },
+        {
+          "frame": "synth_03.png",
+          "question": "risk",
+          "actual": {
+            "type": "score",
+            "probabilities": {
+              "0": 0.8188419113259229,
+              "1": 0.1164104086418522,
+              "2": 0.046088362687592505,
+              "3": 0.018659317344632446
+            },
+            "score": 0.26456508605093454,
+            "legend": {
+              "0": "Very unlikely",
+              "1": "Possible",
+              "2": "Likely",
+              "3": "Almost certain"
+            },
+            "confidence": 0.7354349139490655
+          },
+          "reference": {
+            "type": "score",
+            "probabilities": {
+              "0": 0.7573541261748573,
+              "1": 0.13236830882042072,
+              "2": 0.07293204082302673,
+              "3": 0.037345524181695205
+            },
+            "score": 0.3902689630115598,
+            "legend": {
+              "0": "Very unlikely",
+              "1": "Possible",
+              "2": "Likely",
+              "3": "Almost certain"
+            },
+            "confidence": 0.6097310369884402
+          }
+        },
+        {
+          "frame": "synth_04.png",
+          "question": "risk",
+          "actual": {
+            "type": "score",
+            "probabilities": {
+              "0": 0.8190577136974856,
+              "1": 0.11632242205414353,
+              "2": 0.04600378930946165,
+              "3": 0.018616074938909197
+            },
+            "score": 0.2641782254897944,
+            "legend": {
+              "0": "Very unlikely",
+              "1": "Possible",
+              "2": "Likely",
+              "3": "Almost certain"
+            },
+            "confidence": 0.7358217745102056
+          },
+          "reference": {
+            "type": "score",
+            "probabilities": {
+              "0": 0.7604314627058721,
+              "1": 0.12927466055832262,
+              "2": 0.07212330166378145,
+              "3": 0.038170575072023746
+            },
+            "score": 0.38803298910195677,
+            "legend": {
+              "0": "Very unlikely",
+              "1": "Possible",
+              "2": "Likely",
+              "3": "Almost certain"
+            },
+            "confidence": 0.6119670108980433
+          }
+        },
+        {
+          "frame": "synth_05.png",
+          "question": "risk",
+          "actual": {
+            "type": "score",
+            "probabilities": {
+              "0": 0.8188666073569366,
+              "1": 0.11645735857807522,
+              "2": 0.046032096637762296,
+              "3": 0.01864393742722587
+            },
+            "score": 0.2644533641352774,
+            "legend": {
+              "0": "Very unlikely",
+              "1": "Possible",
+              "2": "Likely",
+              "3": "Almost certain"
+            },
+            "confidence": 0.7355466358647226
+          },
+          "reference": {
+            "type": "score",
+            "probabilities": {
+              "0": 0.7862692895620476,
+              "1": 0.11875885459574637,
+              "2": 0.06286449589883172,
+              "3": 0.032107359943374394
+            },
+            "score": 0.340809926223533,
+            "legend": {
+              "0": "Very unlikely",
+              "1": "Possible",
+              "2": "Likely",
+              "3": "Almost certain"
+            },
+            "confidence": 0.659190073776467
+          }
+        },
+        {
+          "frame": "synth_06.png",
+          "question": "risk",
+          "actual": {
+            "type": "score",
+            "probabilities": {
+              "0": 0.8196623600161121,
+              "1": 0.11608733626002828,
+              "2": 0.045759012594189914,
+              "3": 0.018491291129669622
+            },
+            "score": 0.26307923483741696,
+            "legend": {
+              "0": "Very unlikely",
+              "1": "Possible",
+              "2": "Likely",
+              "3": "Almost certain"
+            },
+            "confidence": 0.7369207651625831
+          },
+          "reference": {
+            "type": "score",
+            "probabilities": {
+              "0": 0.7601694720907746,
+              "1": 0.12923550028046218,
+              "2": 0.07163058646184564,
+              "3": 0.03896444116691763
+            },
+            "score": 0.38938999670490637,
+            "legend": {
+              "0": "Very unlikely",
+              "1": "Possible",
+              "2": "Likely",
+              "3": "Almost certain"
+            },
+            "confidence": 0.6106100032950936
+          }
+        },
+        {
+          "frame": "synth_07.png",
+          "question": "risk",
+          "actual": {
+            "type": "score",
+            "probabilities": {
+              "0": 0.8195780775868935,
+              "1": 0.11603252114222298,
+              "2": 0.045862680284345585,
+              "3": 0.018526720986537893
+            },
+            "score": 0.26333804467052785,
+            "legend": {
+              "0": "Very unlikely",
+              "1": "Possible",
+              "2": "Likely",
+              "3": "Almost certain"
+            },
+            "confidence": 0.7366619553294722
+          },
+          "reference": {
+            "type": "score",
+            "probabilities": {
+              "0": 0.7295980967998718,
+              "1": 0.14469986992292252,
+              "2": 0.08081130593108417,
+              "3": 0.04489072734612159
+            },
+            "score": 0.44099466382345565,
+            "legend": {
+              "0": "Very unlikely",
+              "1": "Possible",
+              "2": "Likely",
+              "3": "Almost certain"
+            },
+            "confidence": 0.5590053361765444
+          }
+        }
+      ]
+    }
+  },
+  "cache_hidden_error": [
+    {
+      "frame": "synth_00.png",
+      "max_abs": 0.16015625,
+      "mean_abs": 0.004804345779120922
+    },
+    {
+      "frame": "synth_01.png",
+      "max_abs": 0.0947265625,
+      "mean_abs": 0.004729913547635078
+    },
+    {
+      "frame": "synth_02.png",
+      "max_abs": 0.140625,
+      "mean_abs": 0.004781436640769243
+    },
+    {
+      "frame": "synth_03.png",
+      "max_abs": 0.1044921875,
+      "mean_abs": 0.004828218836337328
+    },
+    {
+      "frame": "synth_04.png",
+      "max_abs": 0.140625,
+      "mean_abs": 0.004831042140722275
+    },
+    {
+      "frame": "synth_05.png",
+      "max_abs": 0.1171875,
+      "mean_abs": 0.004835363943129778
+    },
+    {
+      "frame": "synth_06.png",
+      "max_abs": 0.1875,
+      "mean_abs": 0.00489561865106225
+    },
+    {
+      "frame": "synth_07.png",
+      "max_abs": 0.1953125,
+      "mean_abs": 0.004761997610330582
+    }
+  ],
+  "prefix_snapshot_sha256": "9743d4c9a2f66e58ccdd652d18f94cc9a1e2874a66ce705c624c590f19245369",
+  "prefix_snapshot_unchanged": true,
+  "frame_a_replay_exact": true,
+  "prefix_cache_bytes": 21798912,
+  "cache_layers": {
+    "ArraysCache": 18,
+    "KVCache": 6
+  },
+  "head": "native torch CPU fp32",
+  "reference": "ref_cpu_fp32.jsonl",
+  "timings": {
+    "vit": {
+      "n": 40,
+      "p50_ms": 17.2769165,
+      "p90_ms": 19.851,
+      "p99_ms": 20.782875,
+      "max_ms": 20.782875
+    },
+    "text_from_cache": {
+      "n": 40,
+      "p50_ms": 29.704083,
+      "p90_ms": 32.531708,
+      "p99_ms": 33.872209,
+      "max_ms": 33.872209
+    },
+    "end_to_end": {
+      "n": 40,
+      "p50_ms": 54.6857085,
+      "p90_ms": 57.235041,
+      "p99_ms": 74.413791,
+      "max_ms": 74.413791
+    }
+  },
+  "samples_ms": {
+    "vit": [
+      17.025417,
+      18.753708,
+      16.158084,
+      17.432,
+      15.990291,
+      17.310458,
+      18.116084,
+      15.961542,
+      18.104,
+      17.717708,
+      16.755917,
+      17.791709,
+      16.279791,
+      17.243375,
+      19.806417,
+      19.013666,
+      16.852208,
+      17.24225,
+      16.271708,
+      15.691041,
+      17.732167,
+      15.527958,
+      20.182333,
+      16.935917,
+      19.561,
+      16.160416,
+      17.13,
+      20.782875,
+      16.678209,
+      17.241209,
+      17.778208,
+      15.967083,
+      19.851,
+      20.531,
+      19.939458,
+      16.761084,
+      18.17025,
+      18.6235,
+      16.2505,
+      19.541833
+    ],
+    "text_from_cache": [
+      29.312875,
+      31.434375,
+      29.608584,
+      29.656625,
+      29.912833,
+      29.386958,
+      29.53875,
+      29.6975,
+      29.645958,
+      33.429209,
+      29.457583,
+      27.939208,
+      29.6475,
+      27.92375,
+      31.262708,
+      27.750875,
+      29.526375,
+      29.906041,
+      28.880292,
+      31.046125,
+      31.638417,
+      31.20925,
+      31.642375,
+      30.862292,
+      31.23875,
+      28.251875,
+      29.455958,
+      33.060625,
+      31.729625,
+      29.711667,
+      29.647292,
+      29.710666,
+      32.531708,
+      33.504375,
+      29.535709,
+      31.880292,
+      29.582708,
+      31.541417,
+      33.872209,
+      29.519
+    ],
+    "end_to_end": [
+      52.266333,
+      53.878542,
+      55.817833,
+      55.950292,
+      53.950875,
+      57.697625,
+      57.448416,
+      52.7425,
+      54.617667,
+      52.459584,
+      55.351042,
+      53.940584,
+      54.486666,
+      53.569625,
+      54.38075,
+      52.676334,
+      57.196167,
+      54.899333,
+      54.264958,
+      55.186083,
+      52.201959,
+      54.788125,
+      52.869166,
+      54.75375,
+      52.718833,
+      55.027875,
+      58.311333,
+      54.060334,
+      55.919375,
+      55.617167,
+      55.412125,
+      53.08825,
+      74.413791,
+      54.163167,
+      56.697375,
+      57.235041,
+      55.956334,
+      53.6575,
+      53.093542,
+      54.765
+    ]
+  },
+  "warmup": 3,
+  "stage_definitions": {
+    "vit": "ViT through image merger, materialized processor pixels",
+    "text_from_cache": "Fresh detached prefix-cache restore, tail text tower, hidden concat, materialized embeddings and mRoPE indices",
+    "end_to_end": "Native Compiler, reorder, ViT, embedding/merge/mRoPE, cache restore and tail text, CPU head and answers"
+  },
+  "peak_gpu_memory_bytes": 5117917512
+}

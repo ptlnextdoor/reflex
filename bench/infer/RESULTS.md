@@ -140,3 +140,113 @@ flattens at ~18 ms (launch/dispatch bound, 24 layers). Implications:
   the text tower at **~18 to 20 ms** (from 63), so ~37 ms total with the 17 ms ViT.
 - The ~9 to 18 ms floor is the 24-layer launch cost. Below it needs fused kernels
   (sys1rust's lever) or a smaller backbone.
+
+## Question-first prefix streaming prototype, 2026-10-20 PDT
+
+`streaming.py` uses the same pinned fp16 backbone and native fp32 CPU MixerHead.
+It permutes the snapshot Compiler's existing token blocks, with no new words or
+retokenization of content:
+
+```text
+cached:    <user> all four questions, candidates </user>
+per frame: <user> original state text, image </user>
+           <assistant> Question 1 Decision:\n ... Question 4 Decision:\n
+```
+
+The original assistant opener and `Question k Decision:` readouts are retained.
+No repeated instructions in the readout. All role spans are remapped through the
+inverse token permutation and checked against original token IDs: instruction and
+candidate spans are in the cached prefix, context is only the state/image block,
+and decision positions are in the final suffix. The context block keeps the native
+processor's text-before-image order. Total sequence length is unchanged.
+
+| tokens | cached once | per frame | total |
+| --- | --- | --- | --- |
+| question message | 184 | 0 | 184 |
+| state/context message, including 66 visual tokens | 0 | 91 | 91 |
+| assistant opener and four short readouts | 0 | 27 | 27 |
+| **total** | **184** | **118** | **302** |
+
+The earlier ~74-token estimate was optimistic: actual processor output is 66 visual
+tokens, plus 25 state/text/wrapper tokens, plus 27 readout tokens. This prototype
+therefore remains above the text tower's ~64-token fixed-cost region.
+
+### Cache correctness, separate from zero-shot quality
+
+A one-time prefix forward populates 6 native `KVCache` objects and 18 native
+`ArraysCache(size=2)` objects. Each DeltaNet cache contains its trailing 3-token
+causal-convolution window and recurrent matrix. Native `prefix_cache_snapshot` /
+`prefix_cache_restore` expose all state required here. Every frame restores into
+fresh cache objects, fresh Python containers, and fresh MLX array handles. Backing
+buffers may be shared until updated, but mutable array handles are not shared.
+Full-sequence mRoPE indices are computed before slicing the 118 frame tokens, so
+cached attention keys and new image/readout positions use the same coordinates as
+a full reordered forward. Prefix position IDs equal `0..183` on all three axes.
+
+**Cached versus reordered without cache: 32/32, 100%**, standard answer gate.
+All four questions pass 8/8. Maximum probability delta is **0.000730**.
+Maximum hidden-state absolute difference is **0.195313** across the eight fp16
+comparisons, with framewise mean absolute errors 0.00473 to 0.00490. These small
+answer differences are consistent with changing fp16 computation block sizes, not
+bitwise-identical full versus split forwards. Snapshot SHA-256 is unchanged after
+every correctness frame and again after the benchmark. Running frame A, then the
+other seven frames, then A produces exactly equal answer dictionaries.
+
+Prefix cache tensors occupy **21,798,912 bytes (20.79 MiB)**, excluding cached final
+prefix hidden rows and model weights. There is no growing history across frames.
+The native CPU head reads saved prefix hidden rows plus this frame's hidden rows.
+No library changes or DeltaNet surgery were required.
+
+**Zero-shot reordered versus true state-first fp32 reference: 15/32, 46.875%.**
+This is agreement with `ref_cpu_fp32.jsonl`, not ground-truth driving accuracy.
+
+| question | standard gate | cached vs uncached | reordered vs state-first fp32 |
+| --- | --- | --- | --- |
+| steer | same argmax | 8/8 | 7/8 |
+| throttle | same argmax | 8/8 | 8/8 |
+| on_road | noul absolute error <= 0.02 | 8/8 | 0/8 |
+| risk | score absolute error <= 0.05 | 8/8 | 0/8 |
+| **all** | | **32/32, 100%** | **15/32, 46.875%** |
+
+Steer becomes `straight` even on frame 0, where the reference says `left`.
+Throttle retains its argmax but probabilities change substantially. Noul stays
+near 0.6111 to 0.6116 and risk near 0.2631 to 0.2646 across all frames. The reordered
+model is nearly image-insensitive on these eight synthetic frames. Correct cache
+mechanics do not make this a usable zero-shot replacement for state-first inference.
+
+### Per-frame latency
+
+Forty samples per stage (8 frames x 5), after the untimed correctness pass and
+3 end-to-end warm-ups. One GPU process, no concurrent GPU work. Each timer includes
+`mx.eval` and `mx.synchronize`. Prefix prefill is one-time setup, excluded below.
+
+| path | ViT p50/p90/p99 ms | text p50/p90/p99 ms | end-to-end p50/p90/p99 ms | frame tokens | cache gate | zero-shot gate |
+| --- | --- | --- | --- | --- | --- | --- |
+| question-first, fp16, restored prefix cache | **17.28 / 19.85 / 20.78** | **29.70 / 32.53 / 33.87** | **54.69 / 57.24 / 74.41** | **118** | **100%** | **46.875%** |
+
+ViT is patch embedding through merger with materialized processor pixels.
+Text-from-cache includes fresh cache restore, 118-token text forward and full hidden
+row reconstruction. Embedding lookup, image merge and mRoPE construction are already
+materialized for this isolated stage. End to end includes the native Compiler,
+reordering, image processing, ViT, all embedding/position setup, cache restore,
+text tower, CPU head and answer decoding. Cache hashing is outside all timers.
+
+`ponytail:` the full Compiler still repeats static question tokenization each frame.
+It reuses model work, not every CPU preprocessing operation. There are about 7.7 ms
+between the sum of isolated stage medians and end-to-end median, but independently
+measured medians are not an additive component profile. Text remains the largest
+measured stage. p99 with 40 samples is the observed maximum, not a stable tail SLA.
+
+This measures a speed/quality tradeoff, not an accuracy-preserving speedup.
+Confidence is high in fixed-workload cache correctness and measured latency,
+low in zero-shot utility. Artifacts: `ref_streaming.jsonl` (cached),
+`ref_streaming_uncached.jsonl`, `streaming_results.json` (both gates, per-question
+breakdowns, immutable-cache checks, hidden errors, raw timings and stage definitions).
+
+Exact commands from `bench/infer/`, run serially:
+
+```bash
+OMP_NUM_THREADS=4 HF_HUB_OFFLINE=1 .venv/bin/python streaming.py --selftest
+OMP_NUM_THREADS=4 HF_HUB_OFFLINE=1 .venv/bin/python streaming.py
+OMP_NUM_THREADS=4 HF_HUB_OFFLINE=1 .venv/bin/python streaming.py --bench --warmup 3 --repeats 5
+```
