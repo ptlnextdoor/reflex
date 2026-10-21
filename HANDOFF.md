@@ -1,45 +1,47 @@
-# reflex: handoff state (2026-10-20 19:30 PT)
+# reflex: handoff state (2026-10-20 21:00 PT)
 
-Read this first when resuming. Battery hit 6% mid-session, two Claude workers died on
-an Anthropic API error, so work stopped mid-flight.
+Read this first when resuming. The user works on this Mac while agents run: **never open
+windows or send keys on the active Desktop.** All GUI work goes to Desktop 2 (below).
 
 ## Verified (re-run by the coordinator, not just reported)
 
-- `sim/`: `node sim/check.js` passes. Node vs Chromium byte-exact over 5000 ticks,
-  WR recording 59372564 finishes at frame 22123, the game's own Verify returns true.
-  28,331 ticks/s single thread (50x target missed; use worker_threads).
-- `.claude/hooks/leaderboard_guard.py`: blocks POSTs to vps.kodub.com (exit 2), allows GETs.
-- `bench/infer/valen_ref.py`: Valen-0.8B (rev c2c481f) runs on CPU, 302 tokens/request,
-  reference answers in `ref_cpu.jsonl`. Zero-shot steering is near useless (fine-tune needed).
+| what | number | where |
+| --- | --- | --- |
+| sim parity | Node vs Chromium byte-exact over 5000 ticks; WR 59372564 ends at frame 22123, game Verify=true | `node sim/check.js` |
+| sim speed | 114,480 ticks/s single thread (114x realtime) | same |
+| Valen PyTorch MPS | 421 ms p50, 542 p99 | `bench/infer/RESULTS.md` |
+| **Valen MLX fp16** | **86.7 ms p50** e2e (ViT 16.8, text 63.2), **32/32 vs true fp32** | `valen_mlx.py` |
+| text-tower scaling | 9.1 ms fixed + 0.19 ms/token, ~18 ms floor below 64 tokens | `scaling.py` |
+| streaming (question-first) | 54.7 ms e2e, cache exact (32/32 vs uncached), **image-blind** (15/32) | `streaming.py` |
+| why image-blind | Mixer head reads the frame 99.2% through candidate-role features; question-first freezes them (0.000 change) | `stream_audit.py` |
+| leaderboard guard | blocks POSTs to vps.kodub.com (exit 2), allows GETs | `.claude/hooks/` |
+
+Gate reference is `bench/infer/ref_cpu_fp32.jsonl` (true fp32). The older `ref_cpu.jsonl`
+was secretly bf16 autocast, so don't gate against it.
 
 ## Built, not measured
 
-- `eye/`: builds, `eye selftest` passes (commit 6369cc4). `bench-capture` saw only idle
-  frames. Two causes the worker found: (1) the built-in display was asleep on battery
-  (`CGActiveDisplayCount=0` until `caffeinate -u`), (2) Chrome sends few complete
-  frames when not frontmost. Status codes seen: 0 = complete, 1 = idle. Resume:
-  on wall power, `caffeinate -d &`, bring the `eye/probe/anim.html` Chrome window to front,
-  `eye bench-capture --rect <content rect> --seconds 10`, then `bench-m2p`.
+- `eye/`: SCK capture, CGEvent keys, m2p bench, plus `--window <id>` capture (works on
+  another Desktop) and `--mode topid` keys (no focus). Selftest passes.
+- **Desktop 2 procedure:** user runs `eye/open-test-browser.sh` (Chrome for Testing,
+  separate from their Chrome), drags it to Desktop 2, says "moved". Then
+  `eye list-windows --all --app com.google.chrome.for.testing` for the id,
+  `eye postid-test --app com.google.chrome.for.testing --window <id>` first (proves keys
+  arrive without focus), then `bench-capture --window <id>` and `bench-m2p --window <id> --mode topid`.
+  Tried and failed: `com.apple.spaces app-bindings` pin and off-screen window position
+  (both opened on the user's Desktop; reverted).
 
-## Not started
+## Next, in order
 
-- **Done since:** Valen MLX fp16 port (`bench/infer/valen_mlx.py`): **86.7 ms p50** end to end,
-  forward 82.1 ms (ViT 16.8, text tower 63.2), **32/32 vs true fp32 reference**.
-  PyTorch MPS was 421 ms. See `bench/infer/RESULTS.md`.
-- eye benches on Desktop 2: run `eye/open-test-browser.sh`, user drags the window to
-  Desktop 2, then `eye list-windows --all` for its id and `--window <id> --mode topid`.
-  Never open windows on the user's active Desktop.
+1. `research/ENGINE.md` from Fable (agent `bug`, running).
+2. **Head retrain for streaming** (the architecture change): backbone frozen, a new head
+   that reads the frame through the context/decision roles, distilled from the
+   state-first Valen as teacher on sim frames. Target: ~55 ms and >= 99% agreement.
+3. eye benches once the user says "moved".
+4. Data engine: real-game frames + sim labels, then Box head, then the Rust `engine/`.
 
-- Valen MPS baseline (`cd bench/infer && .venv/bin/python valen_ref.py --device mps`).
-- mlx-vlm path: `mlx-vlm 0.7.9` installed in `bench/infer/.venv`, has `qwen3_5` with
-  GatedDeltaNet. Valen keys are `backbone.language_model.*` -> `language_model.model.*`,
-  `backbone.visual.*` -> `vision_tower.*`, plus `head.*` (Mixer, port by hand from
-  `heads.py`). Take hidden states before `lm_head`.
-- `research/ENGINE.md`: the Fable reviewer died before writing it. Re-spawn with the same prompt.
-- Rust `engine/` (sys1rust fork), Box head, data engine, closed loop, L1 to L3.
+## Agents
 
-## Order to resume
-
-1. Wall power. Re-run `node sim/check.js` and `eye selftest` (smoke).
-2. eye benches, then the Valen MPS baseline (one GPU job at a time).
-3. Re-spawn the Fable engine review, then the mlx-vlm bake-off builder.
+- `bug` (claude-fable-5-1): ENGINE.md, read-only.
+- `cat` (gpt-6.1-sol): hit its OpenAI usage limit after `fa62c27`. Don't re-spawn on gpt
+  until the limit resets.
