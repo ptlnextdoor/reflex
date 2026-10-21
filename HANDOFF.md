@@ -14,6 +14,8 @@ windows or send keys on the active Desktop.** All GUI work goes to Desktop 2 (be
 | text-tower scaling | 9.1 ms fixed + 0.19 ms/token, ~18 ms floor below 64 tokens | `scaling.py` |
 | streaming (question-first) | 54.7 ms e2e, cache exact (32/32 vs uncached), **image-blind** (15/32) | `streaming.py` |
 | why image-blind | Mixer head reads the frame 99.2% through candidate-role features; question-first freezes them (0.000 change) | `stream_audit.py` |
+| head-only fix | 41% -> 64% held-out; frozen features hold R^2 ~0.7 of the signal. Insufficient | `distill_head.py` |
+| prompt trim | -39 tokens = -1.5 ms, answers change (17/32). Not a lever | `prompt_trim.py` |
 | leaderboard guard | blocks POSTs to vps.kodub.com (exit 2), allows GETs | `.claude/hooks/` |
 
 Gate reference is `bench/infer/ref_cpu_fp32.jsonl` (true fp32). The older `ref_cpu.jsonl`
@@ -31,17 +33,22 @@ was secretly bf16 autocast, so don't gate against it.
   Tried and failed: `com.apple.spaces app-bindings` pin and off-screen window position
   (both opened on the user's Desktop; reverted).
 
-## Next, in order
+## Next, in order (from research/ENGINE.md, fb9bb39)
 
-1. `research/ENGINE.md` from Fable (agent `bug`, running).
-2. **Head retrain for streaming** (the architecture change): backbone frozen, a new head
-   that reads the frame through the context/decision roles, distilled from the
-   state-first Valen as teacher on sim frames. Target: ~55 ms and >= 99% agreement.
-3. eye benches once the user says "moved".
-4. Data engine: real-game frames + sim labels, then Box head, then the Rust `engine/`.
+1. **Data engine** (gates everything below): replay the WR and perturbed recordings in
+   the headless sim, render frames, label each with the sim state (car pose, projected
+   hitbox, the plan's next action). Real-game frames via eye once the user says "moved".
+2. **Paired LoRA**: fine-tune Valen on sim-labeled frames twice, state-first and
+   question-first, same data. Keep question-first if held-out accuracy is within 2 points.
+   P ~0.7. Unlocks ~55 ms streaming.
+3. **Token diet** on that checkpoint (terse questions, 1 readout token, 128 patches): ~30 ms.
+4. **Student + Box**: ViT-S student (~3 to 5 ms) with a DFL box head on the pre-merge
+   ViT grid (12x22), trained on sim hitboxes, Valen as teacher and fallback.
+5. Rust `engine/` once the shapes are fixed (sys1rust measured 1.12 to 1.25x over Python MLX).
+6. eye benches once the user says "moved".
 
 ## Agents
 
-- `bug` (claude-fable-5-1): ENGINE.md, read-only.
+- `bug` (claude-fable-5-1): finished, wrote `research/ENGINE.md`.
 - `cat` (gpt-6.1-sol): hit its OpenAI usage limit after `fa62c27`. Don't re-spawn on gpt
   until the limit resets.
