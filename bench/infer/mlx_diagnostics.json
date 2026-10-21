@@ -1,0 +1,33 @@
+{
+  "frame": "synth_00.png",
+  "revision": "c2c481fcb319bd9ae834abc7c6373271710cf24e",
+  "versions": {"torch": "2.14.1", "transformers": "5.20.2", "mlx": "0.32.4", "mlx-vlm": "0.7.9"},
+  "fp32_mlx_vs_fp32_torch_hidden": {
+    "max_abs": 0.04235267639160156,
+    "mean_abs": 0.0001317019632551819,
+    "relative_l2": 0.00021306438429746777,
+    "reference_max_abs": 42.53350830078125
+  },
+  "norm_offset_ablation": {
+    "shifted_vectors": 61,
+    "with_plus_one_hidden_max_abs": 0.04235267639160156,
+    "without_plus_one_hidden_max_abs": 47.160560607910156
+  },
+  "fp32_mlx_vs_stored_cpu_reference": {"passed": 31, "total": 32, "fraction": 0.96875},
+  "synth_05_on_road": {
+    "stored_ref_cpu": 0.7455883026123047,
+    "fresh_torch_cpu_fp32": 0.7173847556114197,
+    "fresh_torch_cpu_default_bf16_autocast": 0.7333257575832082,
+    "mlx_fp32": 0.7173967957496643,
+    "mlx_fp16": 0.7191068315772167,
+    "mlx_bf16": 0.6924668160816079
+  },
+  "notes": [
+    "No library files were modified. Full HF zero-centered RMSNorm vectors need +1 before casting to reduced precision.",
+    "Depthwise Conv1d uses [out, kernel, 1], patch Conv3d uses [out, temporal, height, width, in]. Existing sanitize handles both.",
+    "mRoPE position IDs match PyTorch exactly. MLX fp32 hidden states closely match fresh PyTorch fp32.",
+    "Stored reference came from the documented transformers 5.4.0 baseline. Installed transformers is now 5.20.2, torch 2.14.1.",
+    "Version drift is confirmed, but its causal contribution to the stored-reference mismatch was not isolated. The stored gate was not changed.",
+    "Current snapshot CPU default uses bf16 autocast with fp32 stored parameters. The explicit fp32 hidden export disables autocast."
+  ]
+}
