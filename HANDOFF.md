@@ -1,7 +1,11 @@
-# reflex: handoff state (2026-10-20 21:00 PT)
+# reflex: handoff state (2026-10-20 21:30 PT)
 
 Read this first when resuming. The user works on this Mac while agents run: **never open
 windows or send keys on the active Desktop.** All GUI work goes to Desktop 2 (below).
+
+Moved from jcode to T3 Code on 2026-10-20. Everything lives in this repo: `CLAUDE.md`
+(rules), `DESIGN.md` (plan), `research/ENGINE.md` (engine verdict), `bench/infer/RESULTS.md`
+(every measured number + command), this file (state + next steps).
 
 ## Verified (re-run by the coordinator, not just reported)
 
@@ -38,6 +42,12 @@ was secretly bf16 autocast, so don't gate against it.
 1. **Data engine** (gates everything below): replay the WR and perturbed recordings in
    the headless sim, render frames, label each with the sim state (car pose, projected
    hitbox, the plan's next action). Real-game frames via eye once the user says "moved".
+   Attempt 1 (Opus, 15 min) got stuck making the game's WebGL renderer draw in headless
+   Chromium (SwiftShader flags, the "hardware acceleration disabled" dialog) and produced
+   nothing. Two ways forward: (a) headless with `--use-angle=swiftshader` and capture
+   frames by pausing the worker (PauseCar=7) at exact frame indices, or (b) skip headless
+   and capture the real game window on Desktop 2 with `eye --window <id>` while replaying
+   the WR keys by pid. (b) also tests the real pipeline.
 2. **Paired LoRA**: fine-tune Valen on sim-labeled frames twice, state-first and
    question-first, same data. Keep question-first if held-out accuracy is within 2 points.
    P ~0.7. Unlocks ~55 ms streaming.
@@ -49,6 +59,12 @@ was secretly bf16 autocast, so don't gate against it.
 
 ## Agents
 
-- `bug` (claude-fable-5-1): finished, wrote `research/ENGINE.md`.
-- `cat` (gpt-6.1-sol): hit its OpenAI usage limit after `fa62c27`. Don't re-spawn on gpt
-  until the limit resets.
+None running. jcode swarm was shut down for the move to T3 Code.
+
+## Environment
+
+- Python: `bench/infer/.venv` (py3.12, torch 2.14.1, transformers 5.20.2, mlx 0.32.4,
+  mlx-vlm 0.7.9). Valen-0.8B rev c2c481f in `~/.cache/huggingface`. Use `HF_HUB_OFFLINE=1`.
+- Node 26 for `sim/`. Game files in gitignored `vendor/` (`sim/fetch.sh`).
+- Swift 6.4 for `eye/` (`swift build -c release`).
+- Sibling clone of sys1rust: `~/Workspace/developer/sys1rust` (Rust port target).
