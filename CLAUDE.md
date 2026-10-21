@@ -50,3 +50,10 @@ drives Polytrack from a live desktop video stream with real key presses. Read
   recommendation states P(success) and its most likely failure.
 - GSD: not used. `DESIGN.md` is the plan and `bench/*/RESULTS.md` is the state.
 - gstack (user skill): `/browse` for checking the live game page by hand.
+
+## Git workflow
+
+- Remote: private GitHub `origin`. `main` is protected by convention: agents work on a
+  branch `track/<letter>-<topic>`, commit small, open a PR with `gh pr create`, and the
+  coordinator merges after re-running the PR's check (`loop/isolation.py` + the track's
+  own check). Commit messages: imperative, one line, why in the body.
