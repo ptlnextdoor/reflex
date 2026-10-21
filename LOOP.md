@@ -60,3 +60,4 @@ anything not produced by the agent itself. Run it before logging any result.
 | 4 | 22:04 | D | CDP key timing | p50 0.1 ms, max 2.9 ms | yes |
 | 6 | 23:06 | D | `loop/record_line.py`: play any line through the real game's engine and record it | works; used for the excluded row 5 video | yes (harness) |
 | 7 | 23:10 | all | **isolation rule** (owner): restart planning from scratch, no human data | | yes |
+| 8 | 23:20 | E | WR removed from ctrl/; parity on synthetic controls; reference = learn/best.json when present | coordinator re-check: `loop/isolation.py ctrl data learn` **ok**; `node ctrl/check.mjs` 3/3 parity, snapshot/restore exact, 115k ticks/s | yes |
