@@ -31,3 +31,5 @@ then live from pixels with a visual System One model. Never submit anything.
 | # | time | track | change | result | kept |
 | --- | --- | --- | --- | --- | --- |
 | 0 | 21:58 | B | headless Metal render probe | renders, 7 s boot | yes |
+| 1 | 22:00 | A | coordinator scorer `loop/score.mjs`, WR calibration | WR finishes 0/40 under +/-1 ms per-toggle jitter, 0/40 at +/-2 ms. Single-toggle +/-1 ms shifts: 125/266 still finish | yes |
+| 2 | 22:01 | A | single-toggle +/-1 ms shift scan | best finish **22119 ms (-4 ms vs WR)** from one shift. Slack exists | yes |
