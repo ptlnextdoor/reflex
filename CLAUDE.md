@@ -38,3 +38,15 @@ drives Polytrack from a live desktop video stream with real key presses. Read
 - Swift: `swift-reviewer`, `swift-build-resolver`. Training: `mle-reviewer`, `pytorch-patterns`.
 - Loops: `loop-operator`, skills `autonomous-loops`, `eval-harness`, `verification-loop`.
 - Before claiming done: `/quality-gate`, superpowers `verification-before-completion`.
+- Numbers: project skill `reflex-bench`, command `/bench`. Guard hook
+  `.claude/hooks/leaderboard_guard.py` blocks any leaderboard submit (exit 2).
+
+## Method stack
+
+- everything-claude-code (this `.claude/`): agents, skills, rules, the guard hook.
+- superpowers (user plugin): `systematic-debugging`, `verification-before-completion`,
+  `writing-plans` for multi-step work.
+- elon-musk-skill (user skill): question each requirement, delete before optimizing. Every
+  recommendation states P(success) and its most likely failure.
+- GSD: not used. `DESIGN.md` is the plan and `bench/*/RESULTS.md` is the state.
+- gstack (user skill): `/browse` for checking the live game page by hand.
