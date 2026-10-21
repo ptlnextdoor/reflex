@@ -1,0 +1,8 @@
+{
+ "track": "summer1",
+ "game_version": "0.6.3",
+ "finishFrame": 22111,
+ "recording": "eNol0EtLlAEUBuBnBueTMcVlqAPhMN4mURwTI6LRqY2KwoyGCy-g6KrJhUUMOLTOXbiqX1Kt_AmGRJvwZ5i06_uOZ_XCec97OUXZnFd850fOT0qJC24TH9nmFw85pMoGT2kywxFldpkIPM0xc2yxyGtq7DMb2_T2LcPUE_15zcQrCnlTnLDAYC7j1HLa4bLJDs9CYZzfBd0h7YFM8wWrcZLiRjCrYTpJi0rgcuBUfC1o6yFVD-XHkb8ROmmX54FXeMk3WapW0FL-GSOcMkYfnYprvubc8bfgkqsky_an178HSnSLmdf9E_ZYjsrzUX-JD7Hq5H3pcZPPgn3udRDZ3vCIT4zyLuq850lUS-c_yJcvxw",
+ "provenance": "human WR (Monstrosity, 22123) with 15 key presses shifted 1 to 2 ms by local search",
+ "verify": "node -e \"import('./sim/sim.js').then(m=>console.log(m.verifyRecording('summer1',require('./records/summer1_22111.json').recording,22111)))\""
+}
