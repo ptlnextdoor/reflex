@@ -1,0 +1,13 @@
+{
+  "full_tokens": 302,
+  "terse_tokens": 263,
+  "full_forward_p50_ms": 85.6,
+  "terse_forward_p50_ms": 84.1,
+  "full_vs_fp32_ref": 1.0,
+  "terse_vs_full_same_frames": {
+    "passed": 17,
+    "total": 32,
+    "fraction": 0.53125,
+    "max_probability_delta": 0.27897232484928874
+  }
+}

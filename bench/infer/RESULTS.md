@@ -322,3 +322,14 @@ saves ~4 ms (0.19 ms/token), not 19. Exact-accuracy paths are therefore:
   the image steer to stay on the road?"); every 50 tokens cut is ~9.5 ms, but changes
   the prompt, so it needs the agreement gate re-run.
 Real streaming speed (55 ms) needs option (a), a backbone fine-tune in question-first order.
+
+## Prompt trim (coordinator, 2026-10-20)
+
+`prompt_trim.py`: same model, same state-first order, shorter question wording.
+302 -> 263 tokens, forward p50 **85.6 -> 84.1 ms** (24 samples each). Agreement of terse vs
+full prompt on the same 8 frames: **17/32 (53%)**. Choices hold (steer, throttle 16/16);
+noul and score shift a lot (risk 0.46 -> 0.92), because the wording IS the question.
+So prompt trimming changes the answers and buys only ~1.5 ms. **Not a lever.** Most of the
+211-token block is fixed scaffolding Valen's compiler adds (`Question k / Task / Candidates`,
+bilingual noul candidate text, 4 readout lines). Changing that needs retraining anyway.
+Command: `HF_HUB_OFFLINE=1 .venv/bin/python prompt_trim.py`
