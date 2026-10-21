@@ -10,12 +10,19 @@ the live page (not a file written earlier):
   4. the drawn chassis mesh (three.js "Body" matrixWorld) sits at position + massOffset
      (0.6 m along the car's up axis, exactly as the game's Car.update composes it),
   5. the rendered PNG for frame k is pixel-identical to a second screenshot of the same
-     render (no in-between rendering), and differs from the previous sampled frame.
+     render (no in-between rendering), and differs from the previous sampled frame,
+  6. the projected hitbox (every car mesh vertex through the render's view/projection
+     matrices) encloses, within 1 px, every pixel of the car's silhouette (the diff between
+     re-renders of the same state with the car drawn on top, no depth test, and hidden),
+     and is tight (silhouette reaches each box edge within 2 px). Independent of the random
+     paint. Silhouettes come from the WebGL canvas alone (the DOM HUD can cover the car).
+     The car is then restored and the frame re-rendered to the identical PNG.
 Prints every checked frame. Exit 0 only when every assert holds.
 
 Usage: python3 data/check.py [runs/drives/summer1_s1.json] [--frames 50,500,1000,1500,2000,2500,3000]
 """
 import argparse
+import io
 import json
 import struct
 import subprocess
@@ -23,10 +30,25 @@ import sys
 import tempfile
 from pathlib import Path
 
+import numpy as np
+from PIL import Image
+
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from render import REPO, STATE_BYTES, Session, make_labels  # noqa: E402
 
 MASS_OFFSET = 0.6
+
+
+def car_pixels(png_with, png_without):
+    """Bounding box and count of pixels that differ between the car-on-top (no depth test, no
+    cast shadow) and car-hidden canvas renders."""
+    a = np.asarray(Image.open(io.BytesIO(png_with)).convert("RGB")).astype(int)
+    b = np.asarray(Image.open(io.BytesIO(png_without)).convert("RGB")).astype(int)
+    diff = np.abs(a - b).max(axis=2) > 8
+    if diff.sum() == 0:
+        return None
+    ys, xs = np.nonzero(diff)
+    return int(xs.min()), int(ys.min()), int(xs.max()), int(ys.max()), int(diff.sum())
 
 
 def decode(raw, k):
@@ -65,6 +87,7 @@ def main():
 
     session = Session()
     checked = 0
+    painted = 0
     worst = 0.0
     prev_png = None
     try:
@@ -73,7 +96,7 @@ def main():
         step = 50
 
         def on_sample(k, car_id):
-            nonlocal checked, worst, prev_png
+            nonlocal checked, worst, prev_png, painted
             if k not in wanted:
                 return
             frames, pos, quat = decode(raw, k)
@@ -99,18 +122,40 @@ def main():
             assert png == again, f"k={k} two screenshots of the same render differ"
             assert png != prev_png, f"k={k} frame identical to the previous sample"
             prev_png = png
+            box = session.box()
+            assert box and box["vertices"] == 2374 and box["meshes"] == 7, box
+            # Silhouette from the WebGL canvas alone (the DOM HUD can cover the car's bottom edge).
+            session.page.evaluate("() => __rf.rerender('hidden')")
+            hidden = session.canvas()
+            session.page.evaluate("() => __rf.rerender('ontop')")
+            ontop = session.canvas()
+            session.page.evaluate("() => __rf.rerender('normal')")
+            shown = session.screenshot()
+            assert shown == png, f"k={k} re-render with the car shown again differs from the frame"
+            paint = car_pixels(ontop, hidden)
+            assert paint, f"k={k} hiding the car changed no pixels"
+            x0, y0, x1, y1, npx = paint
+            assert box["x0"] - 1 <= x0 and box["y0"] - 1 <= y0 and x1 <= box["x1"] + 1 and y1 <= box["y1"] + 1, \
+                f"k={k} car pixels {paint} escape projected box {box}"
+            # And the box is tight: the silhouette reaches each edge within 2 px (vertex vs raster).
+            assert x0 - box["x0"] < 2 and y0 - box["y0"] < 2 and box["x1"] - x1 < 2 and box["y1"] - y1 < 2, \
+                f"k={k} projected box {box} is loose around car pixels {paint}"
+            painted += 1
             worst = max(worst, err, qerr, merr)
             checked += 1
             print(f"k={k:5d} page=({page_pos[0]:.4f},{page_pos[1]:.4f},{page_pos[2]:.4f}) sim=({pos[0]:.4f},{pos[1]:.4f},{pos[2]:.4f}) "
                   f"pos_err={err:.1e} quat_err={qerr:.1e} mesh_err={merr:.1e} speed={p['speedKmh']:.1f} km/h "
-                  f"held={lab['mask_held']} next={lab['steer']}/{lab['throttle']}", flush=True)
+                  f"held={lab['mask_held']} next={lab['steer']}/{lab['throttle']} "
+                  f"box=({box['x0']:.0f},{box['y0']:.0f},{box['x1']:.0f},{box['y1']:.0f}) car_px={paint[:4]} n={paint[4]}", flush=True)
 
         session.run(max(wanted), step, on_sample)
     finally:
         session.close()
     assert checked == len(wanted), (checked, wanted)
+    assert painted == checked
     print(f"check PASS: {checked} frames, page car state == Node sim state, worst error {worst:.2e} (tol {args.tol}), "
-          f"chassis mesh at position + {MASS_OFFSET} m up, screenshots deterministic; track={meta['track']} source={controls.name}")
+          f"chassis mesh at position + {MASS_OFFSET} m up, screenshots deterministic, hitbox encloses every car pixel; "
+          f"track={meta['track']} source={controls.name}")
 
 
 if __name__ == "__main__":

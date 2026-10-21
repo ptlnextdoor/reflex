@@ -59,6 +59,8 @@
       rf.renders++;
       rf.scene = this.scene;
       rf.camera = this.camera;
+      rf.rendererObj = this;
+      rf.lastSun = args[0];
       return result;
     };
     return 'ok';
@@ -113,6 +115,72 @@
     return before;
   };
 
+  // Re-render the current state with the player car's meshes changed, then restore:
+  // mode 'hidden' = car meshes invisible, 'noshadow' = car drawn but casting no shadow,
+  // 'ontop' = car drawn last without depth test (full silhouette, nothing occludes it),
+  // 'normal' = as the game draws it. data/check.py diffs 'ontop' against 'hidden':
+  // those pixels are exactly the car's own geometry, independent of its random paint.
+  rf.rerender = mode => {
+    const scene = rf.scene;
+    const meshes = [];
+    scene.traverse(o => { if (o.isMesh && /^(Body|Exhaust|Suspension|Wheel|Rims)/.test(o.name)) meshes.push(o); });
+    const mats = m => Array.isArray(m.material) ? m.material : [m.material];
+    const was = meshes.map(m => [m.visible, m.castShadow, m.renderOrder, mats(m).map(x => [x.depthTest, x.depthWrite])]);
+    for (const m of meshes) {
+      if (mode === 'hidden') m.visible = false;
+      if (mode !== 'normal') m.castShadow = false;
+      if (mode === 'ontop') { m.renderOrder = 1e6; for (const x of mats(m)) { x.depthTest = false; x.depthWrite = false; } }
+    }
+    rf.rendererObj.update(rf.lastSun);
+    meshes.forEach((m, i) => {
+      m.visible = was[i][0]; m.castShadow = was[i][1]; m.renderOrder = was[i][2];
+      mats(m).forEach((x, j) => { x.depthTest = was[i][3][j][0]; x.depthWrite = was[i][3][j][1]; });
+    });
+    return meshes.length;
+  };
+
+  // Exact 2D hitbox of the player car as drawn: every vertex of the car's meshes (Body +
+  // Exhaust child, Suspension with morph targets applied, 4 wheels) through the last
+  // render's view and projection matrices, into pixel coordinates (origin top-left, y down).
+  // Returns null when no vertex lands in front of the camera. `inside` is the fraction of
+  // vertices that fall inside the viewport, so a cropped box can be told apart.
+  rf.box = (width, height) => {
+    const cam = rf.camera, scene = rf.scene;
+    if (!cam || !scene) return null;
+    const names = new Set(['Body', 'Exhaust0', 'Exhaust1', 'Exhaust2', 'Suspension', 'Wheel0']);
+    const meshes = [];
+    scene.traverse(o => { if (o.isMesh && (names.has(o.name) || /^(Exhaust|Wheel|Rims)/.test(o.name))) meshes.push(o); });
+    const THREE = rf.req(4922);
+    const v = new THREE.Pq0();
+    const mvp = new THREE.kn4().multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse);
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity, n = 0, inside = 0;
+    for (const mesh of meshes) {
+      const pos = mesh.geometry.attributes.position;
+      const infl = mesh.morphTargetInfluences, morphs = mesh.geometry.morphAttributes?.position;
+      const m = new THREE.kn4().multiplyMatrices(mvp, mesh.matrixWorld);
+      for (let i = 0; i < pos.count; i++) {
+        v.fromBufferAttribute(pos, i);
+        if (infl && morphs) for (let j = 0; j < morphs.length; j++) {
+          const w = infl[j]; if (!w) continue;
+          v.x += w * morphs[j].getX(i); v.y += w * morphs[j].getY(i); v.z += w * morphs[j].getZ(i);
+        }
+        // Clip-space w must be positive (in front of the near plane).
+        const e = m.elements;
+        const x = e[0] * v.x + e[4] * v.y + e[8] * v.z + e[12];
+        const y = e[1] * v.x + e[5] * v.y + e[9] * v.z + e[13];
+        const w = e[3] * v.x + e[7] * v.y + e[11] * v.z + e[15];
+        if (w <= 0) continue;
+        const px = (x / w + 1) * 0.5 * width, py = (1 - y / w) * 0.5 * height;
+        n++;
+        if (px >= 0 && px < width && py >= 0 && py < height) inside++;
+        if (px < minX) minX = px; if (px > maxX) maxX = px;
+        if (py < minY) minY = py; if (py > maxY) maxY = py;
+      }
+    }
+    if (n === 0) return null;
+    return {x0: minX, y0: minY, x1: maxX, y1: maxY, meshes: meshes.length, vertices: n, inside: inside / n};
+  };
+
   // What the page holds at render time: the car object's public getters, the drawn
   // chassis meshes ("Body") and the camera matrices of the last render.
   rf.probe = id => {
@@ -127,6 +195,7 @@
       quaternion: q ? {x: q.x, y: q.y, z: q.z, w: q.w} : null,
       speedKmh: car?.getSpeedKmh() ?? null,
       finished: car?.hasFinished() ?? null,
+      primaryHex: car?.getCarStyle().primaryHex ?? null,
       bodies, renders: rf.renders,
       camera: cam ? {
         view: Array.from(cam.matrixWorldInverse.elements),

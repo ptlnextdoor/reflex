@@ -24,7 +24,7 @@ import threading
 import time
 from pathlib import Path
 
-from PIL import Image
+from PIL import Image, ImageDraw
 from playwright.sync_api import sync_playwright
 
 REPO = Path(__file__).resolve().parents[1]
@@ -161,8 +161,15 @@ class Session:
     def probe(self, car_id):
         return self.page.evaluate("(id) => __rf.probe(id)", car_id)
 
+    def box(self):
+        return self.page.evaluate("([w, h]) => __rf.box(w, h)", [self.width, self.height])
+
     def screenshot(self):
         return self.page.screenshot(type="png")
+
+    def canvas(self):
+        """The WebGL canvas alone (no DOM HUD), same size as the viewport."""
+        return self.page.locator("#screen").screenshot(type="png")
 
     def close(self):
         self.browser.close()
@@ -170,7 +177,7 @@ class Session:
         self.server.shutdown()
 
 
-def render_episode(session, controls_file, out_root, step, small):
+def render_episode(session, controls_file, out_root, step, small, debug_dir=None):
     controls_file = Path(controls_file)
     out_dir = Path(out_root) / controls_file.stem
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -182,6 +189,7 @@ def render_episode(session, controls_file, out_root, step, small):
     if small:
         small_dir.mkdir(exist_ok=True)
     saved = []
+    boxes = {}
     t0 = time.perf_counter()
 
     def on_sample(k, car_id):
@@ -190,13 +198,28 @@ def render_episode(session, controls_file, out_root, step, small):
         if small:
             img = Image.open(io.BytesIO(png)).convert("RGB").resize(small, Image.LANCZOS)
             img.save(small_dir / f"{k:06d}.png", optimize=False)
+        b = session.box()
+        boxes[k] = b
         saved.append(k)
+        if debug_dir and len(saved) in (1, 2, 3) and b:
+            img = Image.open(io.BytesIO(png)).convert("RGB")
+            ImageDraw.Draw(img).rectangle([b["x0"], b["y0"], b["x1"], b["y1"]], outline=(255, 0, 255), width=2)
+            img.save(Path(debug_dir) / f"{controls_file.stem}_{k:06d}.png")
 
     session.run(meta["frames"], step, on_sample)
     dt = time.perf_counter() - t0
-    labels = [json.loads(l) for l in (out_dir / "labels.jsonl").read_text().splitlines()]
-    assert [r["k"] for r in labels] == saved, "labels.jsonl rows and saved frames differ"
+    rows = [json.loads(l) for l in (out_dir / "labels.jsonl").read_text().splitlines()]
+    assert [r["k"] for r in rows] == saved, "labels.jsonl rows and saved frames differ"
     assert not session.errors, session.errors
+    # Hitbox in pixels of the full frame (x0,y0,x1,y1, origin top-left); scale by small/full for the small copy.
+    with (out_dir / "labels.jsonl").open("w") as f:
+        for r in rows:
+            b = boxes[r["k"]]
+            r["box"] = None if b is None else [round(b["x0"], 2), round(b["y0"], 2), round(b["x1"], 2), round(b["y1"], 2)]
+            r["box_inside"] = None if b is None else round(b["inside"], 4)
+            r["image"] = f"{r['k']:06d}.png"
+            r["size"] = [session.width, session.height]
+            f.write(json.dumps(r) + "\n")
     print(f"{out_dir}: {len(saved)} frames ({meta['track']}, {meta['frames']} ms), {dt:.1f} s, {len(saved) / dt:.1f} frames/s, {meta['frames'] / dt / 1000:.2f}x realtime", flush=True)
     return len(saved), dt
 
@@ -209,13 +232,16 @@ def main():
     ap.add_argument("--width", type=int, default=512)
     ap.add_argument("--height", type=int, default=288)
     ap.add_argument("--small", default="256x144", help="extra downscaled copy WxH, or 'none'")
+    ap.add_argument("--debug", default=None, help="dir for hitbox overlays of the first 3 frames per episode")
     args = ap.parse_args()
     small = None if args.small == "none" else tuple(int(v) for v in args.small.split("x"))
+    if args.debug:
+        Path(args.debug).mkdir(parents=True, exist_ok=True)
     session = Session(args.width, args.height)
     total, seconds = 0, 0.0
     try:
         for f in args.controls:
-            n, dt = render_episode(session, f, args.out, args.step, small)
+            n, dt = render_episode(session, f, args.out, args.step, small, args.debug)
             total += n
             seconds += dt
     finally:
