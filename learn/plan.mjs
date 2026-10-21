@@ -6,7 +6,7 @@
 // HORIZON), roll each out from a heap snapshot at the committed state on 12 worker threads,
 // score = checkpoints passed * BIG - road distance to the next gate (learn/route.mjs) + small
 // speed bonus (finish:
-// BIG per gate minus finish tick), refit the per-segment categorical distribution to the
+// BIG per gate plus BIG minus finish tick / 10, so any finish beats any non-finish), refit the per-segment categorical distribution to the
 // elites, repeat ITERS times, commit the best first COMMIT ms, shift the distribution.
 // If the best score stalls, back up BACK ms and re-plan with a flat distribution.
 //
@@ -60,18 +60,27 @@ if (!isMainThread) {
       outer: for (let j = 0; j < segs; j++) {
         const mask = ACTIONS[seqs[i * segs + j]];
         for (let t = 0; t < seg; t++) { const s = car.step(mask); if (s[11] & 2) { fin = car.finishFrame; break outer; } }
-        const p = peek();
-        best = Math.max(best, BIG * p.cp - p.d);
+        // Only grounded states count as progress: a flight is judged where it lands.
+        if ((car.state[11] >> 3) & 15) { const p = peek(); best = Math.max(best, BIG * p.cp - p.d); }
+      }
+      // A rollout that ends in the air is judged where it lands, not where it flies: coast on
+      // (keys do nothing airborne) for up to 3 s until the wheels have touched for 100 ms.
+      if (fin === null && ((car.state[11] >> 3) & 15) === 0) {
+        for (let t = 0, down = 0; t < 3000 && down < 100; t++) {
+          const s = car.step(1);
+          if (s[11] & 2) { fin = car.finishFrame; break; }
+          down = ((s[11] >> 3) & 15) ? down + 1 : 0;
+        }
       }
       const e = peek();
-      if (fin !== null) out[i] = {score: BIG * (NGATES + 1) - fin, cp: e.cp, finish: fin, x: e.x, y: e.y, z: e.z};
+      if (fin !== null) out[i] = {score: BIG * (NGATES + 1) - fin / 10, cp: e.cp, finish: fin, x: e.x, y: e.y, z: e.z};
       else {
         // Speed term: the distance the car would add in LOOK more seconds, so a rollout that
         // arrives fast beats one that arrives slightly closer by crashing. Ending worse than
-        // the best point along the way (fell off, spun, stuck under the road) costs the
-        // regression, capped so flights over lower road are not punished like crashes.
+        // the best grounded point along the way (fell off, spun, landed on the floor) costs
+        // half the regression: the end state is what the next step inherits.
         const end = BIG * e.cp - e.d;
-        out[i] = {score: best + LOOK * e.speed / 3.6 - Math.min(best - end, 300) * 0.5, cp: e.cp, finish: null, x: e.x, y: e.y, z: e.z};
+        out[i] = {score: Math.max(best, end) - 0.5 * Math.max(0, best - end) + LOOK * e.speed / 3.6, cp: e.cp, finish: null, x: e.x, y: e.y, z: e.z};
       }
     }
     parentPort.postMessage({type: 'scores', out});
@@ -79,7 +88,7 @@ if (!isMainThread) {
   car.restore(snapCur);
 } else if (process.argv[1] === new URL(import.meta.url).pathname) {
   const trackName = arg('--track', 'summer1');
-  const N = Number(arg('--samples', 128)), ITERS = Number(arg('--iters', 5)), HORIZON = Number(arg('--horizon', 2000));
+  const N = Number(arg('--samples', 192)), ITERS = Number(arg('--iters', 6)), HORIZON = Number(arg('--horizon', 2500));
   const SEG = Number(arg('--seg', 50)), COMMIT = Number(arg('--commit', 200)), ELITE = Number(arg('--elite', 0.15));
   const BACK = Number(arg('--back', 1000)), STALL = Number(arg('--stall', 6)), MAXMS = Number(arg('--max', 60000));
   const out = arg('--out', new URL('./best.json', import.meta.url).pathname);
@@ -94,12 +103,16 @@ if (!isMainThread) {
   const broadcast = msg => Promise.all(workers.map(w => ask(w, msg)));
 
   // Per-segment categorical distribution over actions; starts biased to full throttle.
+  // Sampling is persistent: with probability RHO a segment repeats the previous one, so long
+  // holds (brake for 500 ms, steer for 400 ms) are common instead of 9^40-rare.
+  const RHO = Number(arg('--rho', 0.6));
   const flat = () => { const p = new Float64Array(SEGS * A); for (let j = 0; j < SEGS; j++) for (let a = 0; a < A; a++) p[j * A + a] = a < 3 ? 0.25 : 0.25 / 6; return p; };
   let probs = flat();
   const masksOf = seq => { const m = []; for (let j = 0; j < SEGS; j++) for (let t = 0; t < SEG; t++) m.push(ACTIONS[seq[j]]); return m; };
   const sample = (p, n) => {
     const seqs = new Uint8Array(n * SEGS);
     for (let i = 0; i < n; i++) for (let j = 0; j < SEGS; j++) {
+      if (j > 0 && rand() < RHO) { seqs[i * SEGS + j] = seqs[i * SEGS + j - 1]; continue; }
       let u = rand(), a = 0;
       while (a < A - 1 && (u -= p[j * A + a]) > 0) a++;
       seqs[i * SEGS + j] = a;

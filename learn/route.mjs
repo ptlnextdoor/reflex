@@ -15,6 +15,10 @@ const vendor = fileURLToPath(new URL('../vendor/polytrack/0.6.3/', import.meta.u
 const track = JSON.parse(fs.readFileSync(new URL('./track.json', import.meta.url), 'utf8'));
 const DRIVABLE = new Set([0, 1, 2, 3, 4]); // Special, Road, RoadTurns, RoadWide, Plane
 const WALLS = new Set([26, 27]);           // PlaneWall, PlaneWallCorner: thin walls, not floor
+// Narrow road parts (Start, Checkpoint, Finish, Straight, Slope..., ToWide*) have a 10.5 m
+// surface (the checkpoint detector width) on a 20 m footprint with kerbs: only the middle two
+// tile columns are drivable. ponytail: turn parts keep their full footprint.
+const NARROW = cfg => cfg.category === 0 || cfg.category === 1 || cfg.id === 8 || cfg.id === 9;
 
 function partTable() {
   let source = fs.readFileSync(`${vendor}simulation_worker.bundle.js`, 'utf8');
@@ -40,8 +44,10 @@ export function buildMap() {
   for (const p of track.parts) {
     const cfg = part(p.id);
     if (!DRIVABLE.has(cfg.category) || WALLS.has(p.id)) continue;
+    const localX = []; cfg.tiles.forEach(x => localX.push(x));
     const tiles = [];
-    cfg.tiles.rotated(p.rotation, p.axis).forEach((x, y, z) => tiles.push([p.x + x, p.y + y, p.z + z]));
+    const narrow = NARROW(cfg);
+    cfg.tiles.rotated(p.rotation, p.axis).forEach((x, y, z, i) => { const lx = localX[i]; if (narrow && lx !== -1 && lx !== 0) return; tiles.push([p.x + x, p.y + y, p.z + z]); });
     for (const [x, y, z] of tiles) {
       const k = key(x, z);
       if (!cells.has(k)) cells.set(k, []);
