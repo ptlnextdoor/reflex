@@ -42,10 +42,10 @@ let argv = CommandLine.arguments
 guard argv.count >= 2 else {
     die("""
     usage: eye <command> [flags]
-      bench-capture --rect x,y,w,h [--size 256x144] [--seconds 10]
-      bench-m2p     --app <bundleid> --rect x,y,w,h [--trials 200] [--mode frontmost|topid]
-      postid-test   --app <bundleid> --rect x,y,w,h   (tests postToPid vs Chrome)
-      list-windows  [--app <bundleid>]
+      bench-capture (--rect x,y,w,h | --window <id>) [--size 256x144] [--seconds 10]
+      bench-m2p     --app <bundleid> (--rect x,y,w,h | --window <id> [--rect window-local]) [--trials 200] [--mode frontmost|topid]
+      postid-test   --app <bundleid> (--rect x,y,w,h | --window <id>)   (tests postToPid without focus)
+      list-windows  [--app <bundleid>] [--all]   (--all includes windows on other Desktops)
       selftest
     """)
 }

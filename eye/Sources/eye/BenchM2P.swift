@@ -41,7 +41,8 @@ private final class M2PState {
 
 func runBenchM2P(_ args: Args) {
     guard let bundleID = args.string("app") else { die("bench-m2p needs --app <bundleid>") }
-    guard let rect = args.rect("rect") else { die("bench-m2p needs --rect x,y,w,h") }
+    let rect = args.rect("rect") ?? Capture.RectPts(x: 0, y: 0, w: 0, h: 0)
+    if args.int("window") == nil && args.rect("rect") == nil { die("bench-m2p needs --window <id> or --rect x,y,w,h") }
     let trials = args.int("trials") ?? 200
     let modeStr = args.string("mode") ?? "frontmost"
 
@@ -98,7 +99,7 @@ func runBenchM2P(_ args: Args) {
 
     let sem = DispatchSemaphore(value: 0)
     Task {
-        do { try await cap.start(rect: rect, outW: 64, outH: 64) }
+        do { try await startCapture(cap, args, outW: 64, outH: 64) }
         catch { die("capture start failed: \(error)") }
         try? await Task.sleep(nanoseconds: 500_000_000) // settle
 

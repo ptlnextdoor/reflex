@@ -32,6 +32,20 @@ final class Capture: NSObject, SCStreamOutput, SCStreamDelegate {
 
     struct RectPts { var x: Double; var y: Double; var w: Double; var h: Double }
 
+    // Capture ONE window by id, wherever it is (another Desktop/Space, behind other
+    // windows). SCK window filters render the window's own surface, so the user's
+    // screen and focus are untouched. rect is in window-local points.
+    func start(windowID: CGWindowID, rect: RectPts?, outW: Int, outH: Int) async throws {
+        let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: false)
+        guard let win = content.windows.first(where: { $0.windowID == windowID }) else {
+            throw NSError(domain: "eye", code: 2, userInfo: [NSLocalizedDescriptionKey: "window \(windowID) not found"])
+        }
+        let filter = SCContentFilter(desktopIndependentWindow: win)
+        let cfg = SCStreamConfiguration()
+        if let r = rect { cfg.sourceRect = CGRect(x: r.x, y: r.y, width: r.w, height: r.h) }
+        try await startStream(filter: filter, cfg: cfg, outW: outW, outH: outH)
+    }
+
     func start(rect: RectPts, outW: Int, outH: Int) async throws {
         let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
         guard let display = content.displays.first else {
@@ -42,6 +56,10 @@ final class Capture: NSObject, SCStreamOutput, SCStreamDelegate {
 
         let cfg = SCStreamConfiguration()
         cfg.sourceRect = CGRect(x: rect.x, y: rect.y, width: rect.w, height: rect.h)
+        try await startStream(filter: filter, cfg: cfg, outW: outW, outH: outH)
+    }
+
+    private func startStream(filter: SCContentFilter, cfg: SCStreamConfiguration, outW: Int, outH: Int) async throws {
         cfg.width = outW
         cfg.height = outH
         cfg.minimumFrameInterval = CMTime(value: 1, timescale: 120)

@@ -65,23 +65,35 @@ func runSelftest() {
 @inline(__always)
 func lumaCrossed(_ luma: Double, _ threshold: Double) -> Bool { luma > threshold }
 
+// ---- capture target --------------------------------------------------------
+// --window <id> captures one window (works on another Desktop, no focus needed).
+// Otherwise --rect captures a display region. ponytail: two modes, one helper.
+func startCapture(_ cap: Capture, _ args: Args, outW: Int, outH: Int) async throws {
+    if let wid = args.int("window") {
+        try await cap.start(windowID: CGWindowID(wid), rect: args.rect("rect"), outW: outW, outH: outH)
+    } else if let rect = args.rect("rect") {
+        try await cap.start(rect: rect, outW: outW, outH: outH)
+    } else {
+        die("need --window <id> or --rect x,y,w,h")
+    }
+}
+
 // ---- list-windows ----------------------------------------------------------
 
 func runListWindows(_ args: Args) {
     let filterApp = args.string("app")
-    for w in Windows.onScreen() where w.layer == 0 {
+    for w in Windows.list(all: args.string("all") != nil) where w.layer == 0 {
         let app = NSRunningApplication(processIdentifier: w.pid)
         let bid = app?.bundleIdentifier ?? "?"
         if let f = filterApp, f != bid { continue }
         let r = w.rect
-        print("pid \(w.pid)  \(bid)  [\(w.owner)] \"\(w.title)\"  rect \(Int(r.minX)),\(Int(r.minY)),\(Int(r.width)),\(Int(r.height))")
+        print("window \(w.id)  pid \(w.pid)  \(bid)  \"\(w.title)\"  rect \(Int(r.minX)),\(Int(r.minY)),\(Int(r.width)),\(Int(r.height))  \(w.onScreen ? "on-screen" : "other-desktop")")
     }
 }
 
 // ---- bench-capture ---------------------------------------------------------
 
 func runBenchCapture(_ args: Args) {
-    guard let rect = args.rect("rect") else { die("bench-capture needs --rect x,y,w,h") }
     let (w, h) = args.size("size", (256, 144))
     let seconds = args.double("seconds") ?? 10.0
 
@@ -105,7 +117,7 @@ func runBenchCapture(_ args: Args) {
     }
 
     Task {
-        do { try await cap0.start(rect: rect, outW: w, outH: h) }
+        do { try await startCapture(cap0, args, outW: w, outH: h) }
         catch { die("capture start failed: \(error)") }
         try? await Task.sleep(nanoseconds: UInt64(seconds * 1e9))
         await cap0.stop()
@@ -113,7 +125,7 @@ func runBenchCapture(_ args: Args) {
     }
     sem.wait()
 
-    print("bench-capture  rect=\(fmt(rect.x,0)),\(fmt(rect.y,0)),\(fmt(rect.w,0)),\(fmt(rect.h,0))  size=\(w)x\(h)  seconds=\(fmt(seconds,1))")
+    print("bench-capture  target=\(args.string("window").map { "window \($0)" } ?? "rect \(args.string("rect") ?? "")")  size=\(w)x\(h)  seconds=\(fmt(seconds,1))")
     print("complete frames: \(completeCount)   idle frames: \(idleCount)   fps: \(fmt(Double(completeCount)/seconds,1))")
     print("inter-frame interval ms:  p50 \(fmt(percentile(intervalsMs,50)))  p99 \(fmt(percentile(intervalsMs,99)))  mean \(fmt(mean(intervalsMs)))")
     print("capture latency ms (host-displayTime):  p50 \(fmt(percentile(captureMs,50)))  p99 \(fmt(percentile(captureMs,99)))  mean \(fmt(mean(captureMs)))")
@@ -126,7 +138,6 @@ func runBenchCapture(_ args: Args) {
 
 func runPostIDTest(_ args: Args) {
     guard let bundleID = args.string("app") else { die("postid-test needs --app <bundleid>") }
-    guard let rect = args.rect("rect") else { die("postid-test needs --rect x,y,w,h") }
     guard let (pid, bid) = Hand.resolve(bundleID: bundleID, pid: nil) else {
         die("could not find running app \(bundleID)")
     }
@@ -144,7 +155,7 @@ func runPostIDTest(_ args: Args) {
     let cap = Capture(wantLuma: true) { f in luma.update(f) }
 
     Task {
-        do { try await cap.start(rect: rect, outW: 64, outH: 64) }
+        do { try await startCapture(cap, args, outW: 64, outH: 64) }
         catch { die("capture start failed: \(error)") }
         try? await Task.sleep(nanoseconds: 400_000_000)
 
