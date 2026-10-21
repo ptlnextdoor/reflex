@@ -143,10 +143,10 @@ controller, the way a human has general vision and track-specific practice.
   margin isn't something general skill finds by accident.
 - Hybrid (this): P ~0.35 to 0.5 live WR, and the perception model transfers.
 
-**Data from the game's own ghosts.** Every leaderboard entry has a replayable recording
-(the "ghost car"). Each one replays byte-exact in the sim, so the top-K ghosts on all 14
-official tracks give unlimited exactly-labeled expert frames. The live ghost on screen is
-also a general skill: "track the target object" (Box on the ghost, Box on my car, close the gap).
+**Data from the game's own ghosts: rejected (owner, 2026-10-20 23:10).** Copying the #1
+ghost got a human run with 1 to 2 ms nudges, not a driver. Reflex-1 learns from the track,
+the physics, and its own runs only (LOOP.md "Isolation rule", `loop/isolation.py`). The
+WR is a number to beat, never an input.
 
 **N+1 loop.** Every run (1) records frames + keys, (2) re-simulates its own keys for exact
 labels, (3) fine-tunes perception and updates controller gains, (4) seeds the optimizer.
