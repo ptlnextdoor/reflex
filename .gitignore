@@ -8,3 +8,4 @@ __pycache__/
 .claude/ecc/
 .venv/
 bench/infer/*_frames/
+distill_frames/

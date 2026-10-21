@@ -1,0 +1,23 @@
+{
+  "steer": {
+    "teacher_std": 0.1488,
+    "context": 0.703,
+    "instruction": -0.071,
+    "candidate": -0.071,
+    "decision": 0.634
+  },
+  "on_road": {
+    "teacher_std": 0.1846,
+    "context": 0.66,
+    "instruction": -0.019,
+    "candidate": -0.019,
+    "decision": 0.62
+  },
+  "risk": {
+    "teacher_std": 0.088,
+    "context": 0.753,
+    "instruction": -0.028,
+    "candidate": -0.028,
+    "decision": 0.814
+  }
+}

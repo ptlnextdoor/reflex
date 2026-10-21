@@ -1,0 +1,23 @@
+{
+  "n_frames": 400,
+  "train": 320,
+  "held_out": 80,
+  "before_original_head": [
+    0.40625,
+    {
+      "steer": "47/80",
+      "throttle": "80/80",
+      "on_road": "3/80",
+      "risk": "0/80"
+    }
+  ],
+  "after_streaming_head": [
+    0.6375,
+    {
+      "steer": "61/80",
+      "throttle": "80/80",
+      "on_road": "12/80",
+      "risk": "51/80"
+    }
+  ]
+}

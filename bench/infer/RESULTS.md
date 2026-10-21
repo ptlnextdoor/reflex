@@ -274,3 +274,39 @@ context/decision roles (retrain head, backbone frozen: cheap), or (b) candidate 
 placed after the image (no prefix reuse for them, ~60 tokens per frame). (a) is the
 architecture change worth making: it's what a control loop needs anyway.
 Command: `HF_HUB_OFFLINE=1 .venv/bin/python stream_audit.py` (output `stream_audit.json`).
+
+## Streaming head distillation (coordinator, 2026-10-20)
+
+Can a retrained head make question-first streaming see the frame? 400 procedurally
+varied synthetic road frames (`distill_head.py`), backbone frozen in MLX fp16,
+teacher = state-first Valen probabilities, 80/20 held-out split, KL loss, CPU training.
+
+**Information is there.** `probe_roles.py`: ridge probe (64 PCA dims) predicting the
+teacher's answer from each question-first role, held-out R^2:
+
+| question | context | instruction | candidate | decision |
+| --- | --- | --- | --- | --- |
+| steer (confidence) | 0.703 | -0.071 | -0.071 | 0.634 |
+| on_road | 0.660 | -0.019 | -0.019 | 0.620 |
+| risk | 0.753 | -0.028 | -0.028 | 0.814 |
+
+**Head results (held-out 80 frames):**
+
+| head | agreement | steer | throttle | on_road (gate 0.02) | risk (gate 0.05) |
+| --- | --- | --- | --- | --- | --- |
+| original Valen head, question-first | 40.6% | 47/80 | 80/80 | 3/80 | 0/80 |
+| Mixer retrained, reads candidate+decision rows | 50.0% | 47/80 | 80/80 | 10/80 | 23/80 |
+| **Mixer + frame x candidate bilinear term** | **63.8%** (peak 65.9%) | 61/80 | 80/80 | 12/80 | 51/80 |
+
+Bilinear head errors: on_road MAE 0.087 (teacher std 0.204), risk MAE 0.045 (teacher std
+0.085, 92% within 2x gate). It learns the frame signal but **misses the 99% gate by a lot**,
+mostly on the tight 0.02 noul gate. Ceiling estimate from the probe: R^2 ~0.7 means
+~55% residual std, consistent with on_road MAE ~0.09. **Verdict: head-only streaming
+can't reach parity**; the frozen question-first context features carry ~70% of the
+signal. Next options: (a) LoRA the backbone under question-first order (a real
+fine-tune), or (b) keep candidates after the image (no reuse for them; ~70 more tokens per
+frame, ~13 ms by the scaling fit, so ~68 ms instead of 55). (b) is zero-risk on
+accuracy and is the default until (a) is tested.
+
+Commands: `HF_HUB_OFFLINE=1 .venv/bin/python distill_head.py --n 400 --epochs 60`,
+`.venv/bin/python probe_roles.py`.
