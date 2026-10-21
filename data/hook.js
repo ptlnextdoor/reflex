@@ -120,10 +120,11 @@
     const bodies = [];
     rf.scene?.traverse(o => { if (o.name === 'Body') bodies.push(Array.from(o.matrixWorld.elements)); });
     const cam = rf.camera;
+    const q = car ? car.getQuaternion() : null;
     return {
       frames: car?.getTime().numberOfFrames ?? null,
       position: car ? car.getPosition() : null,
-      quaternion: car ? car.getQuaternion() : null,
+      quaternion: q ? {x: q.x, y: q.y, z: q.z, w: q.w} : null,
       speedKmh: car?.getSpeedKmh() ?? null,
       finished: car?.hasFinished() ?? null,
       bodies, renders: rf.renders,
