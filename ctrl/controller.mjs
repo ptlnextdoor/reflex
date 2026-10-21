@@ -20,6 +20,7 @@ export const DEFAULT_PARAMS = {
   dvBand: 2.0,    // m/s speed error tolerance before throttle/brake correction
   brakeGain: 0.0, // extra brake duty per m/s over reference speed (0 = feedforward only)
   airD: 1,        // 1 = feedforward D in the air as the reference does
+  psiAlpha: 1.0,  // heading-error low-pass: 1 = no filtering, 0.3 = heavy (for motion-derived heading)
 };
 
 export class Controller {
@@ -31,6 +32,7 @@ export class Controller {
     this.iObs = 0;         // progress index of the last observation
     this.sModel = 0;       // belief of normalized steering now
     this.lastEy = 0;
+    this.psiFilt = 0;      // low-pass heading error (first-order, alpha = p.psiAlpha per step)
     this.out = new Uint8Array(dt);
     this.diag = {maxEy: 0, maxEpsi: 0, steerMs: 0};
   }
@@ -61,7 +63,9 @@ export class Controller {
     const eY = ex * lx + ey3 * ly + ez * lz;
     const fl = obs.fwd[0] * lx + obs.fwd[1] * ly + obs.fwd[2] * lz;
     const ff = obs.fwd[0] * fx + obs.fwd[1] * fy + obs.fwd[2] * fz;
-    const ePsi = Math.atan2(fl, ff);
+    const ePsiRaw = Math.atan2(fl, ff);
+    this.psiFilt += p.psiAlpha * (ePsiRaw - this.psiFilt);
+    const ePsi = this.psiFilt;
     // 3. Predict to the first controlled tick: the observation is ageMs old. Lateral error grows
     //    with the heading error; progress advances with the observed speed ratio.
     const vRef = r.speed[iObs];

@@ -14,9 +14,14 @@ export function rng(seed) {
   return {next, gauss};
 }
 
-export function episode(ref, {latency = 60, jitter = 2, noise = 0.05, headingNoise = 0, speedNoise = 0, seed = 1, params = {}, dt = 8, trace = null, track = 'summer1', abortDistance = 15, warm = 0} = {}) {
+export function episode(ref, {latency = 60, jitter = 2, noise = 0.05, bias = 0, headingNoise = 0, speedNoise = 0, headingSource = 'exact', seed = 1, params = {}, dt = 8, trace = null, track = 'summer1', abortDistance = 15, warm = 0} = {}) {
   // warm: ticks driven open-loop with the exact reference keys (no jitter) before closing the
   // loop, to evaluate the controller on a later section of the track.
+  // bias: constant per-episode position offset of this magnitude (m) in a random horizontal
+  // direction, on top of the white noise (a vision model's systematic error).
+  // headingSource: 'exact' uses the car's true forward axis (plus headingNoise); 'motion' derives
+  // heading from the delta of the last two noisy observed positions, i.e. what a box-only
+  // perception model gives (no orientation output).
   const car = new Car(track);
   const ctrl = new Controller(ref, {latency, dt, params});
   const r = rng(seed);
@@ -29,6 +34,8 @@ export function episode(ref, {latency = 60, jitter = 2, noise = 0.05, headingNoi
   let execMask = 0;
   let finish = null, aborted = false, lastPlanned = 0;
   const obs = {pos: [0, 0, 0], fwd: [0, 0, 1], up: [0, 1, 0], speed: 0};
+  const obsRing = []; // recent noisy observed positions (for motion-derived heading)
+  const biasAngle = r.next() * 2 * Math.PI, bx = bias * Math.cos(biasAngle), bz = bias * Math.sin(biasAngle);
   try {
     for (let k = 0; ; k++) {
       const tk = k * dt;
@@ -43,7 +50,7 @@ export function episode(ref, {latency = 60, jitter = 2, noise = 0.05, headingNoi
         ctrl.iObs = tk - latency; // next observation will be about this + dt
       } else {
         const h = 10 * tObs;
-        obs.pos[0] = hist[h] + noise * r.gauss(); obs.pos[1] = hist[h + 1] + noise * r.gauss(); obs.pos[2] = hist[h + 2] + noise * r.gauss();
+        obs.pos[0] = hist[h] + bx + noise * r.gauss(); obs.pos[1] = hist[h + 1] + noise * r.gauss(); obs.pos[2] = hist[h + 2] + bz + noise * r.gauss();
         let fx = hist[h + 3], fy = hist[h + 4], fz = hist[h + 5];
         const ux = hist[h + 6], uy = hist[h + 7], uz = hist[h + 8];
         if (headingNoise) { // rotate forward about up by a Gaussian angle (Rodrigues)
@@ -53,6 +60,20 @@ export function episode(ref, {latency = 60, jitter = 2, noise = 0.05, headingNoi
           fx = fx * c + cx * s + ux * d * (1 - c); fy = fy * c + cy * s + uy * d * (1 - c); fz = fz * c + cz * s + uz * d * (1 - c);
         }
         obs.fwd[0] = fx; obs.fwd[1] = fy; obs.fwd[2] = fz; obs.up[0] = ux; obs.up[1] = uy; obs.up[2] = uz;
+        obsRing.push([obs.pos[0], obs.pos[1], obs.pos[2]]);
+        if (obsRing.length > 12) obsRing.shift();
+        if (headingSource === 'motion' && obsRing.length >= 2) {
+          // Heading from the chord of recent noisy positions, baseline ~1.5 m (longer baseline = less
+          // angle noise, more lag), projected to the plane of the true up. What a box-only model gives.
+          const v = hist[h + 9];
+          const K = Math.min(obsRing.length - 1, Math.max(1, Math.round(1.5 / Math.max(0.05, v * dt / 1000))));
+          const a = obsRing[obsRing.length - 1 - K], b = obsRing[obsRing.length - 1];
+          let dx = b[0] - a[0], dy = b[1] - a[1], dz = b[2] - a[2];
+          const d = dx * ux + dy * uy + dz * uz;
+          dx -= d * ux; dy -= d * uy; dz -= d * uz;
+          const len = Math.hypot(dx, dy, dz);
+          if (len > 0.3) { obs.fwd[0] = dx / len; obs.fwd[1] = dy / len; obs.fwd[2] = dz / len; }
+        }
         obs.speed = Math.max(0, hist[h + 9] + speedNoise * r.gauss());
         // hist[tObs] is the state after tick tObs; ticks tObs+1 .. tk-1 are already committed, so the
         // first controlled tick tk is `latency` ticks after the observed state.

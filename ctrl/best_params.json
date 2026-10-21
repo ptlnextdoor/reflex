@@ -1,0 +1,12 @@
+{
+ "Ky": 0.2784,
+ "Kpsi": 6.1862,
+ "Kvy": 0,
+ "speedExp": 0,
+ "deadband": 0.0033,
+ "window": 40,
+ "progressAlpha": 1,
+ "dvBand": 2,
+ "brakeGain": 0,
+ "airD": 1
+}
