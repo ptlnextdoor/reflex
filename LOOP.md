@@ -33,3 +33,4 @@ then live from pixels with a visual System One model. Never submit anything.
 | 0 | 21:58 | B | headless Metal render probe | renders, 7 s boot | yes |
 | 1 | 22:00 | A | coordinator scorer `loop/score.mjs`, WR calibration | WR finishes 0/40 under +/-1 ms per-toggle jitter, 0/40 at +/-2 ms. Single-toggle +/-1 ms shifts: 125/266 still finish | yes |
 | 2 | 22:01 | A | single-toggle +/-1 ms shift scan | best finish **22119 ms (-4 ms vs WR)** from one shift. Slack exists | yes |
+| 3 | 22:03 | D | `loop/live_replay.py`: real game, headless Metal, WR keys from Python wall clock via CDP | menu nav works, car drives, **crashed off the track before checkpoint 2** (1/3 cps at 23.2 s). Open-loop wall-clock keys are too jittery for a 0%-margin line, as track A's jitter test predicted | yes (harness) |
