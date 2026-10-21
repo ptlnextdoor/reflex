@@ -17,7 +17,8 @@ the game and the controls, (3) self-correction, so it improves every run.
 | Jev 1.14 (TypeSafe) | text + images | no, hosted API | yes (preview) | network round trip |
 | Laya (Convai) | text | yes, ModernBERT-large | no | 33 ms stock, 13 to 15 ms in sys1rust on M5 |
 | Valen 0.8B/2B/4B | text, image, video | yes, Apache-2.0 | no | Qwen3.5 + ViT, PyTorch reference, ONNX/GGUF exports |
-| Visual Jev (paper) | image | 4B LoRA | no | 5.7 ms/question amortized at 32 questions on an RTX 5090 |
+| Visual Jev (paper) | image | 4B LoRA | no | 5.7 ms/question amortized at 32 questions on an RTX 5090 (throughput, not single-request latency) |
+| OpenAI Decisions, Liquid d1, Solar Decide | text (OpenAI: + image) | no, hosted | no | network round trip |
 
 Valen-0.8B: Qwen3.5-0.8B text tower (24 layers, 3 of every 4 are Gated DeltaNet linear
 attention, hidden 1024), 12-layer ViT (768 wide, patch 16, 2x2 merge), and a 2-layer
@@ -51,15 +52,20 @@ Method is sys1rust's: **bake-off first, then Rust, then levers, each one measure
 
 | # | lever | why | needs |
 | --- | --- | --- | --- |
-| 1 | small frames: 256x144 crop = 144 patches = 36 visual tokens | prefill is linear in tokens | config only |
+| 1 | small frames: a 256x144 crop. Valen's processor upscales to >= 65,536 px (min_pixels), so ~256 patches, ~64 visual tokens after the 2x2 merge, unless min_pixels is lowered and quality re-checked | prefill is linear in tokens | config + agreement check |
 | 2 | **question-first streaming**: questions go before the image, so their KV and DeltaNet state are computed once per session and reused every frame | in a control loop only the frame changes | fine-tune (Valen trained state-first) |
-| 3 | int8 weights, sys1rust-style tuned matmuls, head only at readout rows | memory floor: 1.8 GB fp16 per forward is >= 6.6 ms at 273 GB/s | kernels |
-| 4 | confidence cascade: distilled tiny student answers when its `answer_confidence` clears a threshold, else the full model | most frames are easy; System One confidence exists for exactly this routing | only if 1 to 3 miss the Hz target |
+| 3 | int8 weights, sys1rust-style tuned matmuls, head only at readout rows | weight bytes per forward: ~0.55B text (the 254M-param embedding table is only gathered) + ~85M ViT = ~1.3 GB fp16, >= 4.7 ms at 273 GB/s | kernels |
+| 4 | confidence cascade: distilled tiny student answers when its `answer_confidence` clears a threshold, else the full model | most frames are easy; System One confidence exists for exactly this routing | likely needed, see estimate below |
 
-Rough baseline guess, to be replaced by step 1's number: ~100 tokens through 0.9B
-params is ~180 GFLOP, so ~20 to 25 ms per frame on this GPU. Levers 1 to 3 target
-**< 8 ms p50** (P ~ 0.5). Most likely way it's wrong: the ViT plus DeltaNet scan
-kernels in MLX dominate and don't shrink with token count.
+Estimate (arithmetic, to be replaced by step 1's measurement and `research/ENGINE.md`):
+the M4 Pro 20-core GPU is ~9 TFLOPS fp32/fp16, so ~4 to 5 TFLOPS achieved. One frame with
+4 questions in shared state is ~64 visual + ~250 text tokens, ~2 x 0.55B x 314 + ViT
+= ~390 GFLOP, so **~80 ms unoptimized, compute-bound**. Question-first streaming cuts
+per-frame tokens to ~64 visual + ~10 readout, ~130 GFLOP, **~25 to 30 ms**. So Valen-0.8B
+lands near 30 to 40 Hz at best, and 120 Hz needs lever 4 (a distilled small backbone) or
+a split where the ViT runs on the ANE. The plan carries 1 ms timing either way, so the model
+only needs to correct at 30+ Hz. Most likely way this is wrong: MLX's DeltaNet and ViT
+kernels are far from peak, making it slower still.
 
 ### Box head (the architecture change)
 
@@ -104,9 +110,10 @@ eye/ (Swift): ScreenCaptureKit stream of the game rect, 256x144, 120 Hz, IOSurfa
 - System 2 (Claude Code) reaches the same engine and controls as tools, for menus and
   recovery. Never in the per-frame loop.
 
-Latency budget: capture <= 8.3 ms, engine < 8 ms, key to game < 2 ms, game render 1 to
-2 frames. Motion-to-photon target < 30 ms p50 without the model and < 40 ms with it
-(human visual reaction ~200 ms).
+Latency budget: capture <= 8.3 ms, engine ~25 to 40 ms for Valen-0.8B with streaming
+(< 8 ms only with a distilled student), key to game < 2 ms, game render 1 to 2 frames.
+Motion-to-photon target < 30 ms p50 without the model. Even at 60 ms with the model, the
+loop reacts 3x faster than a human (~200 ms).
 
 ## Self-correction: four loops at four timescales
 
