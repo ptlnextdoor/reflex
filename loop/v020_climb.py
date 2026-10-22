@@ -55,7 +55,8 @@ def main():
     ap.add_argument("--seed", type=int, default=1)
     a = ap.parse_args()
     rnd = random.Random(a.seed)
-    prefix = json.loads(Path(a.prefix).read_text())[: a.keep]
+    prefix = json.loads(Path(a.prefix).read_text())
+    prefix = (prefix["controls"] if isinstance(prefix, dict) else prefix)[: a.keep]
     segs = a.horizon // a.seg
     flat = [0.4 if x == 1 else 0.6 / (len(A) - 1) for x in A]
     probs = [flat[:] for _ in range(segs)]
