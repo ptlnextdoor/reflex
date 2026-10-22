@@ -15,6 +15,7 @@ import argparse
 import functools
 import http.server
 import json
+import sys
 import threading
 from pathlib import Path
 
@@ -46,7 +47,8 @@ def boot(p, video=None):
     server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), functools.partial(Static, directory=str(ROOT)))
     threading.Thread(target=server.serve_forever, daemon=True).start()
     origin = f"http://127.0.0.1:{server.server_port}"
-    b = p.chromium.launch(headless=True, args=["--use-angle=metal", "--enable-gpu", "--ignore-gpu-blocklist", "--autoplay-policy=no-user-gesture-required"])
+    gpu = ["--use-angle=metal", "--enable-gpu"] if sys.platform == "darwin" else ["--use-angle=swiftshader", "--enable-unsafe-swiftshader"]
+    b = p.chromium.launch(headless=True, args=gpu + ["--ignore-gpu-blocklist", "--autoplay-policy=no-user-gesture-required"])
     kw = {"viewport": {"width": 1280, "height": 720}, "service_workers": "block"}
     if video:
         kw["record_video_dir"] = str(Path(video).parent); kw["record_video_size"] = {"width": 1280, "height": 720}
