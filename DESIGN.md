@@ -26,30 +26,104 @@ MLP-Mixer decision head over 4 role vectors (context, instruction, candidate, de
 Shared-state execution encodes the state once for all questions. It's the teacher and the
 reference baseline (86.7 ms MLX fp16, `bench/infer/`), not the base. See "Base model" below.
 
-## Base model (decision, 2026-10-21)
+## Base model: Laya-V (decision, 2026-10-22)
 
-**Laya + Jev-style vision.** Reflex-1 is Laya (ModernBERT-large encoder + typed decision
-head, run by sys1rust's `laya-mlx`) with a vision tower added: a small ViT (the `student/`
-track) turns a 256x144 frame into patch tokens, a linear projector puts them in Laya's state
-sequence next to the text, and Laya's choice/score/noul heads answer as before. New answer
-type **Box** reads the visual token positions. Why: sys1rust runs Laya typed-decisions at
-13 to 15 ms per request on a base M5 (`sys1rust/results/`), so ~36 visual + ~60 question
-tokens plus a ~3 to 5 ms ViT should land near 15 to 25 ms on this M4 Pro (estimate, not
-measured), against Valen's measured 86.7 ms. Valen stays as offline teacher (soft labels
-for judgement questions) and as the accuracy baseline. P(Laya+vision reaches box IoU > 0.7
-and steer agreement within 2 points of the fixed-head student) ~0.6. Most likely way it's
-wrong: a text encoder that never saw images needs more alignment data than sim frames give,
-so it answers trained questions well and new visual questions poorly.
+Two independent reviews (`research/RETHINK-fable.md`, Fable 5.1; `research/RETHINK-sol.md`,
+GPT 6.1 Sol) agreed on the core, and it replaces the 2026-10-21 plan (Laya-large + fresh
+projector):
 
-## Scope (2026-10-21)
+- **Keep Laya's recipe, not Laya's weights.** Keep the typed head read at `[MASK]` option
+  markers, the proper-scoring loss, temperature calibration, Apache-2.0 and `/v1/systemone`.
+  Drop the text-only ModernBERT-large backbone. The laya-vision fork tried "SigLIP projector
+  into Laya's encoder" and the model ignored the image in 5 runs (shuffled images scored the same).
+- **Backbone that already sees.** ModernVBERT (ModernBERT-150M already aligned to SigLIP2,
+  MIT). It's 2.9x cheaper per token than Laya-large on this M4 Pro: 7.1 vs 20.3 ms at 128
+  tokens, measured on a shape probe with random weights.
+  Vision: SigLIP2-B/16 at native 256x144 (6.7 ms measured) shuffled to 36 tokens.
+  Bake-off alternative (Sol): MobileCLIP2-S0 (11.4M params) with late fusion into the head.
+  The cheapest test below picks the winner.
+- **Questions packed in one pass** with a block mask (each question sees image + state, not
+  other questions), trained that way from day one. This is sys1rust's biggest win made native.
+- **"More" than Jev** (all checked against docs.typesafe.ai):
+  - **Box with presence:** edge distributions over the ViT grid plus a fused "present" Noul.
+    Jev's Box always returns coordinates even when the target is absent.
+  - **Metric Score:** levels trained on exact sim quantities, so the expectation is a
+    calibrated measurement. Jev's docs say not to use Score for magnitude.
+  - **Small frames:** 256x144 accepted. Jev rejects images under 280 px per side.
+  - **Two-frame state** at 36 tokens per frame.
+  - **Local, open, fine-tunable.** Jev is hosted only, with no fine-tuning.
+- **Latency target:** about 18 ms p50 in Python MLX and about 14 ms in Rust with sys1rust's
+  levers (compiled fixed shapes padded to 16, dense attention, unpad, head pruned to marker
+  rows, fused qkv/RoPE). NAX gemms and int8 don't carry over (M5-only, and int8 failed the
+  99% agreement gate).
+  Jev's hosted round trip is reported at roughly 150 to 200 ms (third party, no official
+  number). Claim no speedup until Jev is measured side by side.
+- **Cascade:** the ViT-Ti student (`track/student`, IoU 0.77 held out, 2.2 to 4.3 ms median
+  measured) answers the per-frame driving Scores at 120 Hz. Laya-V runs about 60 Hz as
+  arbiter and does Box and general questions.
+- **Valen** stays only as the measured baseline (86.7 ms) and is not a teacher: the sim gives
+  exact labels and permissive VQA sets give general ones.
 
-In: (1) the model, Laya + vision + Box, MLX then Rust in sys1rust's crates with the same
+Plan flaw both reviews caught: the car's own Box carries almost no pose in a chase cam.
+Its centre sd is 12 to 15 px over 4,635 frames, and a constant box already scores IoU 0.647.
+So the controller is fed these per-frame questions instead:
+- Score: lateral offset and heading error
+- Noul: airborne and on_road
+- Box: next gate (it moves on screen and encodes distance)
+- Choice: phase
+
+P(Laya-V p50 <= 20 ms at 5 questions on this Mac) 0.8. P(it measures lateral offset to
+0.2 m RMS) ~0.65. Most likely way it's wrong: a document-trained encoder at 36 tokens
+can't resolve fine road geometry, and then the student drives while Laya-V does Box and
+general questions.
+
+## Polytrack target: 21.0 s (owner, 2026-10-22)
+
+The lap is 1,293 m, so 21.0 s needs a 221 km/h average; the current lap averages 176.
+Fixing both flights and the cp2 to cp3 segment gets about 22.9 s (estimate). The last 1.9 s
+needs a shorter path, so this is a route search, not refinement.
+
+Planner v2:
+- Hierarchical CEM over 6 s horizons from snapshots along the incumbent.
+- A learned V(state) as terminal value.
+- Go-Explore cells (checkpoint, speed, lateral) that restart jump approaches instead of refining them.
+- Then the p05 finish time under jitter.
+
+P(sim < 21.0 s) 0.35 to 0.45 (reviews' range); P(< 22.123 s) 0.65. Cheapest test first:
+from the cp1 snapshot, a 6 s-horizon search on time-to-cp2 (currently 8.54 s). If it doesn't
+drop under 7.0 s, the jump isn't the lever and the path is.
+
+## Scope (2026-10-22)
+
+In: (1) the model, Laya-V (above), MLX then Rust in sys1rust's crates with the same
 `/v1/systemone` API; (2) the harness, `eye/` capture and keys; (3) the Polytrack demo, a
-self-taught lap driven live from pixels. `sim/`, `data/`, `learn/`, `ctrl/` exist only to
-feed (3) and to label frames for (1).
-Frozen: `opt/` (WR-derived, excluded), `records/` speedrun draft and trailer (wait for a
-self-taught demo). No new demo infrastructure until the model side has a measured
-Laya+vision number.
+self-taught lap under 21.0 s driven live from pixels. `sim/`, `data/`, `learn/`, `ctrl/`
+exist only to feed (3) and to label frames for (1).
+
+Cut:
+- Valen as a per-frame driver and the question-first LoRA.
+- Laya-large + fresh projector.
+- The car Box driving the controller.
+- int8 kernels.
+- Rust before the model's shape is final.
+- Broad runtime bake-offs.
+- World models, backbone RL, online weight updates.
+- Trailer and agent-infrastructure work.
+
+Frozen: `opt/` (WR-derived, excluded), `records/` until a sub-22 s self-taught sim lap.
+Battery: one heavy job at a time, on AC only.
+
+Milestones, each ending in a number:
+1. **Cheapest tests** (about 1 day):
+   - (a) Frozen ModernVBERT + MobileCLIP2-S0 + student, each with a lateral/heading Score
+     head on the 4,635 frames. Gate: RMS <= 0.2 m on winter1, plus p50/p99 ms.
+   - (b) The cp1 snapshot jump search. Gate: time-to-cp2 under 7.0 s.
+2. **Laya-V v0** (3 to 5 days): packed block-masked questions, DFL Box with presence, sim
+   question set. Gates: lateral <= 0.2 m, next-gate IoU >= 0.7, p50 <= 20 ms.
+   **Planner v2:** gate <= 22.0 s, >= 0.8 finish rate at +/-2 ms jitter; stretch < 21.0 s.
+3. **Closed loop from pixels**, headless or Desktop 2. Gates: HUD time over 20 runs,
+   >= 10/20 finishes, motion-to-key p50/p99. Then the Rust port (99% gate) and general VQA
+   for Jev parity.
 
 Gap we fill: no open model has Box, and nothing runs a visual System One model fast on a Mac.
 
