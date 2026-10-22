@@ -11,7 +11,7 @@
 // If the best score stalls, back up BACK ms and re-plan with a flat distribution.
 //
 //   node learn/plan.mjs                       # first lap -> learn/best.json, learn/curve.csv
-//   node learn/plan.mjs --samples 192 --iters 6 --horizon 2500 --out learn/best2.json
+//   node learn/plan.mjs --robust 3 --jitter 2 --out learn/best_robust.json   # worst of 3 jittered rollouts
 import fs from 'node:fs';
 import os from 'node:os';
 import {Worker, isMainThread, parentPort, workerData} from 'node:worker_threads';
@@ -52,36 +52,53 @@ if (!isMainThread) {
     if (m.type === 'advance') { car.restore(snapCur); for (const k of m.masks) car.step(k); snapCur = car.snapshot(snapCur); parentPort.postMessage({type: 'ok'}); return; }
     if (m.type === 'replay') { car.restore(snap0); for (const k of m.controls) car.step(k); snapCur = car.snapshot(snapCur); parentPort.postMessage({type: 'ok'}); return; }
     // eval: m.seqs is a Uint8Array of n*segs action indices; expand each into masks of m.seg ms.
-    const {seqs, n, segs, seg} = m;
+    const {seqs, n, segs, seg, robust, jitter} = m;
     const out = new Array(n);
+    const masks = new Uint8Array(segs * seg + 1);
     for (let i = 0; i < n; i++) {
-      car.restore(snapCur);
-      let fin = null, best = -Infinity;
-      outer: for (let j = 0; j < segs; j++) {
-        const mask = ACTIONS[seqs[i * segs + j]];
-        for (let t = 0; t < seg; t++) { const s = car.step(mask); if (s[11] & 2) { fin = car.finishFrame; break outer; } }
-        // Only grounded states count as progress: a flight is judged where it lands.
-        if ((car.state[11] >> 3) & 15) { const p = peek(); best = Math.max(best, BIG * p.cp - p.d); }
-      }
-      // A rollout that ends in the air is judged where it lands, not where it flies: coast on
-      // (keys do nothing airborne) for up to 3 s until the wheels have touched for 100 ms.
-      if (fin === null && ((car.state[11] >> 3) & 15) === 0) {
-        for (let t = 0, down = 0; t < 3000 && down < 100; t++) {
-          const s = car.step(1);
-          if (s[11] & 2) { fin = car.finishFrame; break; }
-          down = ((s[11] >> 3) & 15) ? down + 1 : 0;
+      // Robust scoring: the nominal rollout plus (robust - 1) copies with every segment
+      // boundary moved by U(-jitter, jitter) ms (fixed seeds); the candidate's score is the
+      // worst of them, so the committed keys survive real key timing.
+      let worst = null;
+      for (let r = 0; r < robust; r++) {
+        const rnd = rng(1000 * i + r + 1);
+        let t0 = 0;
+        for (let j = 0; j < segs; j++) {
+          const t1 = j + 1 < segs ? Math.max(t0 + 1, (j + 1) * seg + (r ? Math.round((rnd() * 2 - 1) * jitter) : 0)) : segs * seg;
+          masks.fill(ACTIONS[seqs[i * segs + j]], t0, t1);
+          t0 = t1;
         }
+        car.restore(snapCur);
+        let fin = null, best = -Infinity;
+        for (let t = 0; t < segs * seg; t++) {
+          const s = car.step(masks[t]);
+          if (s[11] & 2) { fin = car.finishFrame; break; }
+          // Only grounded states count as progress: a flight is judged where it lands.
+          if (t % seg === seg - 1 && ((s[11] >> 3) & 15)) { const p = peek(); best = Math.max(best, BIG * p.cp - p.d); }
+        }
+        // A rollout that ends in the air is judged where it lands, not where it flies: coast on
+        // (keys do nothing airborne) for up to 3 s until the wheels have touched for 100 ms.
+        if (fin === null && ((car.state[11] >> 3) & 15) === 0) {
+          for (let t = 0, down = 0; t < 3000 && down < 100; t++) {
+            const s = car.step(1);
+            if (s[11] & 2) { fin = car.finishFrame; break; }
+            down = ((s[11] >> 3) & 15) ? down + 1 : 0;
+          }
+        }
+        const e = peek();
+        let res;
+        if (fin !== null) res = {score: BIG * (NGATES + 1) - fin / 10, cp: e.cp, finish: fin, x: e.x, y: e.y, z: e.z};
+        else {
+          // Speed term: the distance the car would add in LOOK more seconds, so a rollout that
+          // arrives fast beats one that arrives slightly closer by crashing. Ending worse than
+          // the best grounded point along the way (fell off, spun, landed on the floor) costs
+          // half the regression: the end state is what the next step inherits.
+          const end = BIG * e.cp - e.d;
+          res = {score: Math.max(best, end) - 0.5 * Math.max(0, best - end) + LOOK * e.speed / 3.6, cp: e.cp, finish: null, x: e.x, y: e.y, z: e.z};
+        }
+        if (worst === null || res.score < worst.score) worst = res;
       }
-      const e = peek();
-      if (fin !== null) out[i] = {score: BIG * (NGATES + 1) - fin / 10, cp: e.cp, finish: fin, x: e.x, y: e.y, z: e.z};
-      else {
-        // Speed term: the distance the car would add in LOOK more seconds, so a rollout that
-        // arrives fast beats one that arrives slightly closer by crashing. Ending worse than
-        // the best grounded point along the way (fell off, spun, landed on the floor) costs
-        // half the regression: the end state is what the next step inherits.
-        const end = BIG * e.cp - e.d;
-        out[i] = {score: Math.max(best, end) - 0.5 * Math.max(0, best - end) + LOOK * e.speed / 3.6, cp: e.cp, finish: null, x: e.x, y: e.y, z: e.z};
-      }
+      out[i] = worst;
     }
     parentPort.postMessage({type: 'scores', out});
   });
@@ -91,6 +108,7 @@ if (!isMainThread) {
   const N = Number(arg('--samples', 192)), ITERS = Number(arg('--iters', 6)), HORIZON = Number(arg('--horizon', 2500));
   const SEG = Number(arg('--seg', 50)), COMMIT = Number(arg('--commit', 200)), ELITE = Number(arg('--elite', 0.15));
   const BACK = Number(arg('--back', 1000)), STALL = Number(arg('--stall', 6)), MAXMS = Number(arg('--max', 60000));
+  const ROBUST = Number(arg('--robust', 1)), JITTER = Number(arg('--jitter', 2)); // rollouts per candidate, key jitter ms
   const out = arg('--out', new URL('./best.json', import.meta.url).pathname);
   const curvePath = arg('--curve', new URL('./curve.csv', import.meta.url).pathname);
   const seed = Number(arg('--seed', 1));
@@ -124,16 +142,28 @@ if (!isMainThread) {
     const parts = await Promise.all(workers.map((w, k) => {
       const lo = k * per, hi = Math.min(n, lo + per);
       if (lo >= hi) return [];
-      return ask(w, {type: 'eval', seqs: seqs.subarray(lo * SEGS, hi * SEGS), n: hi - lo, segs: SEGS, seg: SEG}).then(r => r.out);
+      return ask(w, {type: 'eval', seqs: seqs.subarray(lo * SEGS, hi * SEGS), n: hi - lo, segs: SEGS, seg: SEG, robust: ROBUST, jitter: JITTER}).then(r => r.out);
     }));
     return parts.flat();
   }
 
   const controls = [];
+  // --prefix <file> --from <tick>: start from a committed own line (e.g. the 6 s search's cp2
+  // line) instead of tick 0, and never back up past it. Accepts {controls} or {masks, frames}.
+  let FLOOR = 0;
+  if (arg('--prefix', null)) {
+    const j = JSON.parse(fs.readFileSync(arg('--prefix'), 'utf8'));
+    let c = j.controls;
+    if (!c) { c = new Array(j.frames).fill(0); let cur = 0, mi = 0; for (let t = 0; t < j.frames; t++) { while (mi < j.masks.length && j.masks[mi][0] <= t) cur = j.masks[mi++][1]; c[t] = cur; } }
+    FLOOR = Math.min(c.length, Number(arg('--from', c.length)));
+    controls.push(...c.slice(0, FLOOR));
+    await broadcast({type: 'replay', controls: Uint8Array.from(controls)});
+    console.log(`prefix: ${FLOOR} ticks from ${arg('--prefix')}`);
+  }
   const t0 = performance.now();
   // History for the learning montage: every attempt that changes the picture (new checkpoint,
   // backup after a stall, finish) plus every 10th step, as mask change points {masks: [[tick, mask], ...]}.
-  const histDir = new URL('./history/', import.meta.url);
+  const histDir = new URL(arg('--history', './history/'), import.meta.url);
   fs.mkdirSync(histDir, {recursive: true});
   let histN = fs.readdirSync(histDir).length;
   const toggles = c => { const t = []; for (let i = 0; i < c.length; i++) if (i === 0 || c[i] !== c[i - 1]) t.push([i, c[i]]); return t; };
@@ -191,7 +221,7 @@ if (!isMainThread) {
     else if (++stall >= STALL) {
       // Progressive backoff: each consecutive stall at the same place backs up further.
       const back = Math.min(BACK * 2 ** stalls, 8000);
-      const keep = Math.max(0, controls.length - back);
+      const keep = Math.max(FLOOR, controls.length - back);
       stalls++;
       controls.length = keep;
       await broadcast({type: 'replay', controls: Uint8Array.from(controls)});
