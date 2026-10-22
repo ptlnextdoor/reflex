@@ -49,7 +49,8 @@ def boot(p, video=None):
     origin = f"http://127.0.0.1:{server.server_port}"
     gpu = ["--use-angle=metal", "--enable-gpu"] if sys.platform == "darwin" else ["--use-angle=swiftshader", "--enable-unsafe-swiftshader"]
     b = p.chromium.launch(headless=True, args=gpu + ["--ignore-gpu-blocklist", "--autoplay-policy=no-user-gesture-required"])
-    kw = {"viewport": {"width": 1280, "height": 720}, "service_workers": "block"}
+    vp = {"width": 1280, "height": 720} if video or sys.platform == "darwin" else {"width": 160, "height": 90}
+    kw = {"viewport": vp, "service_workers": "block"}
     if video:
         kw["record_video_dir"] = str(Path(video).parent); kw["record_video_size"] = {"width": 1280, "height": 720}
     ctx = b.new_context(**kw)
