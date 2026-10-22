@@ -33,6 +33,10 @@ lateral position.
 | --- | --- | --- | --- | --- |
 | v1 exact (1,149) | 1,149 | **1.66 m** (corr 0.58) | **0.33 m** (s17-19: 0.09 to 0.13) | 1.83 / 3.02 |
 | v1 + 48 random drives + 2 own laps | ~2,900 | 1.89 m (best epoch 0, then diverges to 3.1) | 0.38 m | 1.90 / 3.22 |
+| v1 + winter1 s1-2 in train, held s3-5 | ~1,240 | **0.71 m** | 0.32 m | 1.83 / 4.44 |
+
+Two winter1 episodes in training cut winter1 error from 1.66 m to 0.71 m: the gap is the
+track's look, not the task.
 
 Reading:
 - **Same track, unseen episode: 0.09 to 0.13 m on 3 of 4 summer1 seeds.** The gate is
