@@ -52,6 +52,11 @@ if (!isMainThread) {
   const threads = Number(arg('--threads', Math.max(1, os.availableParallelism() - 1)));
   const seed = Number(arg('--seed', 1));
   const GOAL = arg('--goal') ? arg('--goal').split(',').map(Number) : null;
+  // --via: intermediate gate (cp TARGET-1) to reach first; --tw: metres charged per ms (0.08 = full speed),
+  // so a slow rail clip scores worse than a fast one.
+  const VIA = arg('--via') ? arg('--via').split(',').map(Number) : null;
+  const TW = Number(arg('--tw', 0.02));
+  const dist = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
   let bestD = 1e9;
   // WR reference tick for the target checkpoint (to know what "faster" means)
   const ref = (() => { const car = new Car('summer1'); for (let t = 0; t < line.length; t++) { const s = decodeState(car.step(line[t])); if (s.nextCheckpointIndex >= TARGET || car.finished) return t; } return null; })();
@@ -76,7 +81,8 @@ if (!isMainThread) {
       if (o.y < -5) continue; // fell off the world
       const k = key(o.cp, o.x, o.y, o.z, o.v);
       const prev = cells.get(k);
-      const d = GOAL ? Math.hypot(o.x - GOAL[0], o.y - GOAL[1], o.z - GOAL[2]) + 0.02 * (t - AT) : 0;
+      const p = [o.x, o.y, o.z];
+      const d = !GOAL ? 0 : (VIA && o.cp < TARGET - 1 ? dist(p, VIA) + dist(VIA, GOAL) : dist(p, GOAL)) + TW * (t - AT);
       if (!prev || t < prev.t) { const c = {id: nid++, ctrl, t, d}; byId.set(c.id, c); cells.set(k, c); if (GOAL && d < bestD) { bestD = d; } }
     }
     gen++;
