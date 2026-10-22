@@ -50,11 +50,13 @@ if (arg('--one')) {
 } else {
   const [k, n] = arg('--shard', '0/1').split('/').map(Number);
   const grid = [];
-  for (const t0 of [9300, 9600, 9900])
-    for (const a1 of [[-200, -40], [-215, -60], [-230, -80], [-200, -70]])
+  // t0 after cp2 (WR crosses it at ~9684) so the cut cannot skip the gate. At 300 km/h the car flies off
+  // the banked loop without braking, so brake thresholds go down to 100 km/h.
+  for (const t0 of [9700, 9900, 10100])
+    for (const a1 of [[-200, -40], [-215, -60], [-230, -80], [-200, -70], [-185, -50]])
       for (const a2 of [[-190, -125], [-160, -130], [-140, -120], [-120, -110], null])
-        for (const r of [8, 15]) for (const D of [10, 30]) for (const dead of [2, 6])
-          for (const [brakeAng, brakeV] of [[0, 0], [50, 200], [35, 150]])
+        for (const r of [10, 20]) for (const D of [10, 30]) for (const dead of [3])
+          for (const [brakeAng, brakeV] of [[0, 0], [40, 220], [25, 160], [20, 110]])
             grid.push({t0, wps: a2 ? [a1, a2] : [a1], r, D, dead, brakeAng, brakeV});
   let best = Infinity;
   for (let i = k; i < grid.length; i += n) {
