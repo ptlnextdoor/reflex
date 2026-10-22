@@ -75,7 +75,7 @@ def main():
                 pg.evaluate("() => { window.__car = undefined; window.__plan = {masks:[0], len:1}; window.dispatchEvent(new KeyboardEvent('keydown', {code: 'KeyR'})); }")
                 pg.evaluate("() => window.dispatchEvent(new KeyboardEvent('keydown', {code: 'KeyW'}))")
                 try:
-                    pg.wait_for_function("() => window.__car !== undefined", timeout=3000)
+                    pg.wait_for_function("() => window.__car !== undefined && window.__world !== undefined", timeout=5000)
                     break
                 except Exception:
                     pg.evaluate("() => { if (window.__world) window.__world.__stepN(1); }")
