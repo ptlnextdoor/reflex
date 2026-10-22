@@ -238,7 +238,10 @@ def main():
     ap.add_argument("--height", type=int, default=288)
     ap.add_argument("--small", default="256x144", help="extra downscaled copy WxH, or 'none'")
     ap.add_argument("--debug", default=None, help="dir for hitbox overlays of the first 3 frames per episode")
+    ap.add_argument("--hz", type=int, default=120, help="render cadence; 125 gives a render every 8 ms so --step 16 is an exact 62.5 fps video")
     args = ap.parse_args()
+    global RENDER_HZ
+    RENDER_HZ = args.hz
     small = None if args.small == "none" else tuple(int(v) for v in args.small.split("x"))
     if args.debug:
         Path(args.debug).mkdir(parents=True, exist_ok=True)
