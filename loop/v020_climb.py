@@ -32,7 +32,7 @@ CLIMB_JS = r"""
       const onTop = p.y > 18 && p.y < 26 && p.z > 35 && p.x > -155 && p.x < -45;
       // On top: reward reaching it early and pushing toward +z (the elevated road to the finish).
       const s = onTop ? 10000 + 20 * p.z - 0.5 * (t - prefixLen) / 25
-                      : 30 * Math.min(p.y, 22) - Math.hypot(p.x + 100, p.z - 50);
+                      : (p.x < -50 ? 30 * Math.min(p.y, 22) : 0) - Math.hypot(p.x + 100, p.z - 50);
       if (s > best) { best = s; bestT = t; pos = [p.x, p.y, p.z]; }
     }
   }
