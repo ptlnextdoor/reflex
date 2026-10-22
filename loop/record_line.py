@@ -19,6 +19,7 @@ import functools
 import http.server
 import json
 import subprocess
+import sys
 import threading
 import time
 from pathlib import Path
@@ -70,7 +71,8 @@ def main():
     out_dir = ROOT / "runs/videos"
     out_dir.mkdir(parents=True, exist_ok=True)
     with sync_playwright() as p:
-        b = p.chromium.launch(headless=True, args=["--use-angle=metal", "--enable-gpu", "--ignore-gpu-blocklist",
+        gpu = ["--use-angle=metal", "--enable-gpu"] if sys.platform == "darwin" else ["--use-angle=swiftshader", "--enable-unsafe-swiftshader"]
+        b = p.chromium.launch(headless=True, args=gpu + ["--ignore-gpu-blocklist",
                                                     "--disable-background-timer-throttling",
                                                     "--disable-renderer-backgrounding"])
         ctx = b.new_context(viewport={"width": 1280, "height": 720}, service_workers="block",
