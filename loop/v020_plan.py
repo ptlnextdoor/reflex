@@ -76,6 +76,8 @@ def main():
     ap.add_argument("--iters", type=int, default=3)
     ap.add_argument("--commit", type=int, default=500)
     ap.add_argument("--route", default="normal")
+    ap.add_argument("--init", help="json whose controls[:--init-keep] seed `committed` (e.g. a climb result)")
+    ap.add_argument("--init-keep", type=int, default=0)
     a = ap.parse_args()
     W = S.ROUTE if a.route == "normal" else json.loads(Path(a.route).read_text())
     rnd = random.Random(a.seed)
@@ -83,6 +85,9 @@ def main():
     flat = lambda: [0.45 if x == 1 else 0.55 / (len(A) - 1) for x in A]
     probs = [flat() for _ in range(segs)]
     committed, best_seq = [], None
+    if a.init:
+        c = json.loads(Path(a.init).read_text())
+        committed = (c["controls"] if isinstance(c, dict) else c)[: a.init_keep or None]
     t0 = time.time()
     out = Path(f"runs/top/v020_plan_{a.seed}.json")
     with sync_playwright() as p:
