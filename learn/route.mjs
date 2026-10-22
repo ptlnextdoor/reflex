@@ -12,7 +12,8 @@ import {fileURLToPath} from 'node:url';
 
 const TILE = 5, JUMP = 16;
 const vendor = fileURLToPath(new URL('../vendor/polytrack/0.6.3/', import.meta.url));
-const track = JSON.parse(fs.readFileSync(new URL('./track.json', import.meta.url), 'utf8'));
+const defaultTrack = JSON.parse(fs.readFileSync(new URL('./track.json', import.meta.url), 'utf8'));
+const track = defaultTrack;
 const DRIVABLE = new Set([0, 1, 2, 3, 4]); // Special, Road, RoadTurns, RoadWide, Plane
 const WALLS = new Set([26, 27]);           // PlaneWall, PlaneWallCorner: thin walls, not floor
 // Narrow road parts (Start, Checkpoint, Finish, Straight, Slope..., ToWide*) have a 10.5 m
@@ -20,7 +21,7 @@ const WALLS = new Set([26, 27]);           // PlaneWall, PlaneWallCorner: thin w
 // tile columns are drivable. ponytail: turn parts keep their full footprint.
 const NARROW = cfg => cfg.category === 0 || cfg.category === 1 || cfg.id === 8 || cfg.id === 9;
 
-function partTable() {
+export function partTable() {
   let source = fs.readFileSync(`${vendor}simulation_worker.bundle.js`, 'utf8');
   const patch = (from, to) => { if (!source.includes(from)) throw Error(`patch point missing: ${from}`); source = source.replace(from, to); };
   patch('function Ao(t){const e=co.get(t);', 'self.__part=Ao;function Ao(t){const e=co.get(t);');
@@ -35,7 +36,7 @@ function partTable() {
   return context.__part;
 }
 
-export function buildMap() {
+export function buildMap(track = defaultTrack) {
   const part = partTable();
   const key = (x, z) => `${x},${z}`;
   const cells = new Map(); // "x,z" -> sorted array of levels
