@@ -87,6 +87,8 @@ if (!isMainThread) {
     }
     gen++;
     if (gen % 20 === 0) console.log(`gen ${gen} cells ${cells.size} best ${best ? best.t : '-'} closest ${bestD.toFixed(0)} ref ${ref} ${((Date.now() - t0) / 1000).toFixed(0)}s`);
+    // checkpoint the best path so far, so a long run can be grafted while it keeps searching
+    if (best && gen % 20 === 0) fs.writeFileSync(`runs/top/explore_${AT}_${TARGET}_${seed}.json`, JSON.stringify({at: AT, target: TARGET, ref, best: {t: best.t, controls: prefix.concat(best.ctrl)}, cells: cells.size}));
   }
   for (const w of workers) w.terminate();
   const out = `runs/top/explore_${AT}_${TARGET}_${seed}.json`;
