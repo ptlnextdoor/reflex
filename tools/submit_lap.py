@@ -75,7 +75,11 @@ def main():
     print(f"verified: {frames} frames ({frames / 1000:.3f} s) with the game's own Verify")
     body = urllib.parse.urlencode({"version": "0.6.3", "userToken": token(), "nickname": a.nickname,
                                    "carStyle": CAR_STYLE, "trackId": TRACK, "frames": str(frames),
-                                   "recording": rec["recording"]})
+                                   "recording": rec["recording"],
+                                   # The game always sends this for official/community tracks (main.bundle.js setRecord:
+                                   # n = "official"==category||"community"==category). Without it the upload is not queued
+                                   # for verification.
+                                   "onlyVerified": "true"})
     if a.dry_run or not a.ok:
         print("dry run: would POST", len(body), "bytes as", a.nickname, "(pass --i-am-the-owner-and-authorize-this to send)")
         return
