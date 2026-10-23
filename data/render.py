@@ -20,6 +20,7 @@ import io
 import json
 import re
 import subprocess
+import sys
 import threading
 import time
 from pathlib import Path
@@ -32,7 +33,7 @@ ROOT = REPO / "vendor/polytrack/0.6.3"
 HOOK = REPO / "data/hook.js"
 STATE_BYTES = 227
 RENDER_HZ = 120
-LAUNCH_ARGS = ["--use-angle=metal", "--enable-gpu", "--ignore-gpu-blocklist"]
+LAUNCH_ARGS = (["--use-angle=metal", "--enable-gpu"] if sys.platform == "darwin" else ["--use-angle=swiftshader", "--enable-unsafe-swiftshader"]) + ["--ignore-gpu-blocklist"]
 
 
 def track_title(slug):
