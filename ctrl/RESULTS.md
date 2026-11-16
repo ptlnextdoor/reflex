@@ -9,8 +9,8 @@ run touches this directory: `python3 loop/isolation.py ctrl` passes (LOOP.md iso
 
 | file | what |
 | --- | --- |
-| `sim.mjs` | per-ms stepper (`Car.step(mask)`), whole-heap snapshot/restore (23 MB, 0.6 ms) |
-| `check.mjs` | parity vs `sim.run` on synthetic controls, snapshot/restore, throughput |
+| `sim.mjs` | per-ms stepper (`Car.step(mask)`), whole-heap snapshot/restore (23 MB, 0.6 ms), sparse page snapshots (`calibratePages`, `auditPages`, `snapshotPages`, `restorePages`; whole-heap restore 0.115 ms) |
+| `check.mjs` | parity vs `sim.run` on synthetic controls, snapshot/restore, sparse snapshot exactness, throughput |
 | `reference.mjs` | `loadLine()` reads `learn/best.json` ({controls} or {toggles}); `buildReference()` runs it once, keeps per-ms pose, speed, keys, steering state, contacts |
 | `segment.mjs` | temporary own reference: hand-written steer-to-waypoint rule, start pose to checkpoint 1 in 4752 ms (`lines/segment.json`); `lines/segment_fast.json` is the same rule with deadband 0.08, lookahead 40 (4030 ms) |
 | `controller.mjs` | v1 tracking controller (below) |
