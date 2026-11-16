@@ -11,6 +11,8 @@ and the byte-exact sim. `python3 loop/isolation.py learn` passes.
 | `route.mjs` | drivable tiles from the game's part table (narrow roads keep their middle two columns), Dijkstra cost-to-go field per gate with ramp-aware jump edges, `progress(gate, x, y, z)` in road metres |
 | `plan.mjs` | receding-horizon CEM: 192 piecewise-constant mask sequences (50 ms segments, 2.5 s horizon, persistent sampling), 6 refits, commit 200 ms, 12 worker threads on heap snapshots; stall = back up with doubling backoff |
 | `best.json` | best own lap `{controls, finishFrame}` |
+| `refine.mjs` | finish-time local search on an own line: random run edits (boundary shifts, action swaps, pulses, deletes), each scored by its finishFrame from sparse prefix snapshots (`ctrl/sim.mjs` `snapshotPages`) |
+| `refined.json` | `best.json` after `refine.mjs`: 26515 ms, Verify true (`node loop/verify.mjs learn/refined.json`) |
 | `curve.csv` | step, wall seconds, committed tick, checkpoint, best score, finish |
 | `history/NNN.json` | every attempt that changed the picture (new checkpoint in reach, stall backup, finish, every 10th step) as `{masks: [[tick, mask], ...], frames, finishFrame, checkpoints, progress, wall_s, note}` for the learning montage |
 
