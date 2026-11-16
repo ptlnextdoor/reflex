@@ -72,6 +72,40 @@ for (const [k, controls] of scripts.entries()) {
   console.log(`snapshot/restore PASS: 500 ms branch diverged by ${Math.hypot(divergedPosition.x - refPosition.x, divergedPosition.z - refPosition.z).toFixed(2)} m, restore reproduced all ${controls.length} ticks`);
 }
 
+// Sparse snapshots under the audit contract (ctrl/sim.mjs initPages): audit before the
+// snapshot and after a diverged 3 s branch, then restorePages must give back the whole heap
+// byte for byte (every page, not only S), at many ticks of three scripts.
+{
+  const car = new Car('summer1');
+  const t0 = performance.now();
+  const calibrated = car.calibratePages();
+  const calMs = performance.now() - t0;
+  const pristine = car.snapshot();
+  let checks = 0, grown = 0, restoreMs = 0;
+  const audit = () => { const found = car.auditPages(); grown += found.length; car.addPages(found); };
+  for (const controls of scripts) {
+    car.restore(pristine);
+    for (let t = 0; t < controls.length - 3000; t++) {
+      car.step(controls[t]);
+      if ((t + 1) % 1500) continue;
+      audit();
+      const full = car.snapshot(), sparse = car.snapshotPages();
+      for (let b = 0; b < 3000; b++) car.step(controls[t + 1 + b] ^ 10);
+      audit();
+      const r0 = performance.now();
+      car.restorePages(sparse);
+      restoreMs += performance.now() - r0;
+      sameBytes(car.snapshot(), full, `sparse restore at tick ${t + 1}`);
+      checks++;
+    }
+  }
+  const a0 = performance.now();
+  car.auditPages();
+  const auditMs = performance.now() - a0;
+  car.remove();
+  console.log(`sparse snapshot PASS: ${calibrated} pages calibrated in ${calMs.toFixed(0)} ms, +${grown} by audits, ${checks} whole-heap restores exact, restore ${(restoreMs / checks).toFixed(3)} ms, audit ${auditMs.toFixed(2)} ms`);
+}
+
 // Two cars in one physics instance do not interact: car A's payload bytes are identical with a
 // second car present (even one spawned at the start while A drives), so a sim twin can run next
 // to the real car without a heap copy per frame.
